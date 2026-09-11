@@ -66,7 +66,7 @@ import { DungeonMinimap } from '../ui/DungeonMinimap';
 
 const HERO_TEXTURE = 'herro';
 const PLAYER_MAX_HP = 150;
-const MERCHANT_EMOJI = '🧑‍💼';
+const MERCHANT_EMOJI = '🏪';
 
 const ALL_COMBOS = combosJson as ComboData[];
 const COMBO_BY_ID = new Map<string, ComboData>(ALL_COMBOS.map((c) => [c.id, c]));
