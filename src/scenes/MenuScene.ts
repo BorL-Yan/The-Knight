@@ -35,33 +35,47 @@ export class MenuScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
-    const btn = this.add
-      .rectangle(width / 2, height * 0.62, 280, 72, 0x2e7d32)
+    const combatBtn = this.add
+      .rectangle(width / 2, height * 0.58, 280, 64, 0x2e7d32)
       .setStrokeStyle(3, 0xffffff)
       .setInteractive({ useHandCursor: true });
 
     this.add
-      .text(width / 2, height * 0.62, 'TAP TO START', {
-        fontSize: '24px',
+      .text(width / 2, height * 0.58, 'БОЕВАЯ ЛАБОРАТОРИЯ', {
+        fontSize: '20px',
         color: '#ffffff',
       })
       .setOrigin(0.5);
 
-    btn.on('pointerup', () => this.scene.start('CombatLab'));
+    combatBtn.on('pointerup', () => this.scene.start('CombatLab'));
 
     const previewBtn = this.add
-      .rectangle(width / 2, height * 0.62 + 92, 280, 60, 0x444c5e)
+      .rectangle(width / 2, height * 0.68, 280, 60, 0x444c5e)
       .setStrokeStyle(3, 0xffffff)
       .setInteractive({ useHandCursor: true });
 
     this.add
-      .text(width / 2, height * 0.62 + 92, '🗺 Генератор карты', {
-        fontSize: '22px',
+      .text(width / 2, height * 0.68, '🗺 Генератор карты', {
+        fontSize: '20px',
         color: '#ffffff',
       })
       .setOrigin(0.5);
 
     previewBtn.on('pointerup', () => this.scene.start('DungeonPreview'));
+
+    const mapBtn = this.add
+      .rectangle(width / 2, height * 0.78, 280, 60, 0x315f3a)
+      .setStrokeStyle(3, 0xffd76a)
+      .setInteractive({ useHandCursor: true });
+
+    this.add
+      .text(width / 2, height * 0.78, 'ОБЪЯСНЕНИЕ КАРТЫ', {
+        fontSize: '18px',
+        color: '#ffd76a',
+      })
+      .setOrigin(0.5);
+
+    mapBtn.on('pointerup', () => this.scene.start('MapTest', { explainGeneration: true }));
     applyThickFont(this);
   }
 }
