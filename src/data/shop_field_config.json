@@ -1,0 +1,46 @@
+{
+  "comment": "Конфигурация поля магазина. Магазин появляется ровно в одной комнате данжа (тупик, дальше всего от старта).",
+  "field": {
+    "cols": 4,
+    "rows": 6,
+    "cellSizePx": 40,
+    "enemyCount": 0,
+    "maxGrassMin": 8,
+    "maxGrassSpan": 4,
+    "topReservePx": 70,
+    "bottomReservePx": 150
+  },
+  "shop": {
+    "startOwned": ["fire", "ice", "heal"],
+    "maxStars": 3,
+    "powerPerStar": 0.4,
+    "upgradeCosts": [30, 60, 120],
+    "buyCosts": {
+      "fire": 40,
+      "ice": 40,
+      "heal": 50,
+      "lightning": 50,
+      "focus": 60,
+      "inferno": 120
+    },
+    "rerollCost": 15,
+    "startCoins": 0,
+    "coinRewards": {
+      "enemy_moth": 12,
+      "enemy_gator": 18,
+      "enemy_slime": 15,
+      "elite_wraith": 35,
+      "elite_owbear": 45,
+      "elite_thorn": 40,
+      "miniboss_boar": 70,
+      "miniboss_myconid": 80,
+      "boss_hollow": 150
+    }
+  },
+  "placement": {
+    "exactlyOnePerDungeon": true,
+    "preferDeadEnd": true,
+    "maxDistanceFromStart": true,
+    "cannotBeStartRoom": true
+  }
+}
