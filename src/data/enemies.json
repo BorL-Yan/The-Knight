@@ -1,0 +1,47 @@
+[
+  {
+    "id": "enemy_1",
+    "name": "Enemy_1",
+    "emoji": "🟢",
+    "texture": "enemy_1",
+    "maxHp": 60,
+    "damage": 8,
+    "attackIntervalMs": 800,
+    "strikesPerTurn": 1,
+    "attackType": "slash",
+    "damageGrowth": 1,
+    "spawnWeight": 0.7,
+    "moveChance": 1,
+    "coins": 15
+  },
+  {
+    "id": "enemy_2",
+    "name": "Enemy_2",
+    "emoji": "👹",
+    "texture": "enemy_2",
+    "maxHp": 90,
+    "damage": 10,
+    "attackIntervalMs": 700,
+    "strikesPerTurn": 2,
+    "attackType": "double",
+    "damageGrowth": 2,
+    "spawnWeight": 0.5,
+    "moveChance": 0.5,
+    "coins": 30
+  },
+  {
+    "id": "enemy_boss",
+    "name": "Enemy_Boss",
+    "emoji": "🗿",
+    "texture": "enemy_boss",
+    "maxHp": 130,
+    "damage": 12,
+    "attackIntervalMs": 650,
+    "strikesPerTurn": 3,
+    "attackType": "crush",
+    "damageGrowth": 3,
+    "spawnWeight": 0.3,
+    "moveChance": 0.4,
+    "coins": 60
+  }
+]

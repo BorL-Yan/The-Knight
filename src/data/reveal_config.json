@@ -1,0 +1,9 @@
+{
+  "name": "reveal_default",
+  "comment": "Анимация появления поля. totalMs — полное время эффекта (мс), fadeMs — длительность проявления одной клетки, dropPx — высота в пикселях, с которой клетки опускаются вниз (0 — только затухание без падения), dropEase — easing падения, waveFrom — entry (волна от стороны входа) или center (всегда от центра).",
+  "totalMs": 1200,
+  "fadeMs": 300,
+  "dropPx": 32,
+  "dropEase": "Cubic.easeOut",
+  "waveFrom": "entry"
+}

@@ -1,0 +1,27 @@
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  background: #1a2b1a;
+  overflow: hidden;
+  overscroll-behavior: none;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  font-family: 'Rubik', 'Segoe UI', system-ui, sans-serif;
+  font-weight: 700;
+}
+
+#game {
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#game canvas {
+  touch-action: none;
+}

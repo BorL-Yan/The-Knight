@@ -1,0 +1,22 @@
+{
+  "comment": "Магазин торговца: стартовые способности, цены, награды за врагов.",
+  "startOwned": ["fire", "ice", "heal"],
+  "maxStars": 3,
+  "powerPerStar": 0.4,
+  "upgradeCosts": [30, 60, 120],
+  "buyCosts": {
+    "fire": 40,
+    "ice": 40,
+    "heal": 50,
+    "lightning": 50,
+    "focus": 60,
+    "inferno": 120
+  },
+  "rerollCost": 15,
+  "startCoins": 0,
+  "coinRewards": {
+    "enemy_1": 15,
+    "enemy_2": 30,
+    "enemy_boss": 60
+  }
+}

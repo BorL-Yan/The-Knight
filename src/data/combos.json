@@ -1,0 +1,68 @@
+[
+  {
+    "id": "fire",
+    "name": "Fireball",
+    "icon": "🔥",
+    "points": ["Up", "Right", "Down"],
+    "kind": "damage",
+    "power": 30,
+    "cooldownTurns": 0,
+    "consumesTurn": true,
+    "timeLimitMs": 0
+  },
+  {
+    "id": "ice",
+    "name": "Ice",
+    "icon": "❄️",
+    "points": ["Down", "Left", "Up"],
+    "kind": "damage",
+    "power": 25,
+    "cooldownTurns": 0,
+    "consumesTurn": true,
+    "timeLimitMs": 0
+  },
+  {
+    "id": "lightning",
+    "name": "Lightning",
+    "icon": "⚡",
+    "points": ["Right", "Right", "Up"],
+    "kind": "damage",
+    "power": 45,
+    "cooldownTurns": 2,
+    "consumesTurn": true,
+    "timeLimitMs": 0
+  },
+  {
+    "id": "focus",
+    "name": "Focus",
+    "icon": "✨",
+    "points": ["Up", "Up", "Right"],
+    "kind": "buff_next",
+    "power": 50,
+    "cooldownTurns": 3,
+    "consumesTurn": true,
+    "timeLimitMs": 0
+  },
+  {
+    "id": "heal",
+    "name": "Heal",
+    "icon": "💚",
+    "points": ["Down", "Down", "Up"],
+    "kind": "heal",
+    "power": 35,
+    "cooldownTurns": 2,
+    "consumesTurn": false,
+    "timeLimitMs": 0
+  },
+  {
+    "id": "inferno",
+    "name": "Inferno",
+    "icon": "☄️",
+    "points": ["Up", "Up", "Left", "Left", "Down"],
+    "kind": "damage",
+    "power": 90,
+    "cooldownTurns": 4,
+    "consumesTurn": true,
+    "timeLimitMs": 6000
+  }
+]

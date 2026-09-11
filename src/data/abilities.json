@@ -1,0 +1,29 @@
+[
+  {
+    "id": "fire",
+    "name": "Fireball",
+    "combo": ["Up", "Right", "Down"],
+    "damage": 30,
+    "cooldownMs": 1500,
+    "perfectMs": 800,
+    "fastMs": 1500
+  },
+  {
+    "id": "ice",
+    "name": "Ice",
+    "combo": ["Down", "Left", "Up"],
+    "damage": 25,
+    "cooldownMs": 1200,
+    "perfectMs": 800,
+    "fastMs": 1500
+  },
+  {
+    "id": "lightning",
+    "name": "Lightning",
+    "combo": ["Right", "Right", "Up"],
+    "damage": 45,
+    "cooldownMs": 3000,
+    "perfectMs": 800,
+    "fastMs": 1500
+  }
+]

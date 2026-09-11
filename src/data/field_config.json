@@ -1,0 +1,12 @@
+{
+  "comment": "Конфиг поля: размеры в ячейках, размер одной ячейки в px и сколько врагов создавать.",
+  "cols": 6,
+  "rows": 8,
+  "cellSizePx": 40,
+  "minCellPx": 20,
+  "topReservePx": 70,
+  "bottomReservePx": 150,
+  "enemyCount": 2,
+  "maxGrassMin": 30,
+  "maxGrassSpan": 50
+}

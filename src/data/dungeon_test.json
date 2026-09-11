@@ -1,0 +1,22 @@
+{
+  "comment": "Тестовый данж по референсу: каждый узел = одно поле. type пока только normal, поле оставлено под boss/treasure/shop.",
+  "start": "start",
+  "rooms": [
+    { "id": "boss", "gx": 2, "gy": 0, "type": "normal", "seed": 20001, "links": { "N": null, "S": "a1", "E": null, "W": null } },
+    { "id": "a1", "gx": 2, "gy": 1, "type": "normal", "seed": 20002, "links": { "N": "boss", "S": "start", "E": null, "W": null } },
+    { "id": "w1", "gx": 0, "gy": 2, "type": "normal", "seed": 20003, "links": { "N": null, "S": "w2", "E": "start", "W": null } },
+    { "id": "start", "gx": 1, "gy": 2, "type": "normal", "seed": 20004, "links": { "N": "a1", "S": "c1", "E": "e1", "W": "w1" } },
+    { "id": "e1", "gx": 2, "gy": 2, "type": "normal", "seed": 20005, "links": { "N": null, "S": "c2", "E": null, "W": "start" } },
+    { "id": "w2", "gx": 0, "gy": 3, "type": "normal", "seed": 20006, "links": { "N": "w1", "S": null, "E": "c1", "W": null } },
+    { "id": "c1", "gx": 1, "gy": 3, "type": "normal", "seed": 20007, "links": { "N": "start", "S": "s1", "E": "c2", "W": "w2" } },
+    { "id": "c2", "gx": 2, "gy": 3, "type": "normal", "seed": 20008, "links": { "N": "e1", "S": "treasure", "E": "cur", "W": "c1" } },
+    { "id": "cur", "gx": 3, "gy": 3, "type": "normal", "seed": 20009, "links": { "N": null, "S": "m1", "E": null, "W": "c2" } },
+    { "id": "s1", "gx": 1, "gy": 4, "type": "normal", "seed": 20010, "links": { "N": "c1", "S": null, "E": "treasure", "W": null } },
+    { "id": "treasure", "gx": 2, "gy": 4, "type": "normal", "seed": 20011, "links": { "N": "c2", "S": "bot", "E": "m1", "W": "s1" } },
+    { "id": "m1", "gx": 3, "gy": 4, "type": "normal", "seed": 20012, "links": { "N": "cur", "S": null, "E": "ev", "W": "treasure" } },
+    { "id": "ev", "gx": 4, "gy": 4, "type": "normal", "seed": 20013, "links": { "N": null, "S": "shop", "E": "mouth", "W": "m1" } },
+    { "id": "mouth", "gx": 5, "gy": 4, "type": "normal", "seed": 20014, "links": { "N": null, "S": null, "E": null, "W": "ev" } },
+    { "id": "bot", "gx": 2, "gy": 5, "type": "normal", "seed": 20015, "links": { "N": "treasure", "S": null, "E": null, "W": null } },
+    { "id": "shop", "gx": 4, "gy": 5, "type": "normal", "seed": 20016, "links": { "N": "ev", "S": null, "E": null, "W": null } }
+  ]
+}
