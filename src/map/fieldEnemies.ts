@@ -15,7 +15,7 @@ export type EnemyRole = 'chaser' | 'roamer';
 
 export interface FieldEnemy {
   uid: number;
-  /** id из enemies.json: enemy_1 (слабейший), enemy_2, enemy_boss */
+  /** id из enemies.json (колода из 9: enemy_moth ... boss_hollow) */
   enemyId: string;
   col: number;
   row: number;
@@ -27,11 +27,21 @@ export interface FieldEnemy {
   alive: boolean;
 }
 
-/** Шанс хода после хода игрока: слабее => выше. */
+/** Шанс хода после хода игрока: слабее => выше. Синхронизировано с enemies.json. */
 export const MOVE_CHANCE_BY_ID: Record<string, number> = {
+  enemy_moth: 0.9,
+  enemy_slime: 0.75,
+  enemy_gator: 0.7,
+  elite_wraith: 0.5,
+  elite_thorn: 0.4,
+  elite_owbear: 0.35,
+  miniboss_boar: 0.25,
+  miniboss_myconid: 0.2,
+  boss_hollow: 0.15,
+  // Легаси-сейвы:
   enemy_1: 0.9,
   enemy_2: 0.5,
-  enemy_boss: 0.2,
+  enemy_boss: 0.15,
 };
 
 /** Фолбэк по HP если id неизвестен: легче => выше шанс. */
@@ -56,18 +66,18 @@ function key(p: WorldPos): string {
 
 /**
  * Создать полевых врагов из позиций мира.
- * Первая позиция (или явно weakestFirst) — слабейший наблюдатель.
+ * Первая позиция — слабейший наблюдатель (chaser), остальные — roamer.
  * @param positions клетки из world.enemies
  * @param enemyIds какие типы поставить (по порядку); по умолчанию
- *   ['enemy_1','enemy_2','enemy_boss'] по кругу — слабейший всегда первый.
+ *   regular-колода по кругу — слабейший всегда первый (pickEnemyIds).
  */
 export function createFieldEnemies(
   positions: WorldPos[],
-  enemyIds: string[] = ['enemy_1', 'enemy_2', 'enemy_boss'],
+  enemyIds: string[] = ['enemy_moth', 'enemy_gator', 'enemy_slime'],
   chances: Record<string, number> = MOVE_CHANCE_BY_ID,
 ): FieldEnemy[] {
   return positions.map((p, i) => {
-    const enemyId = enemyIds[i % enemyIds.length] ?? 'enemy_1';
+    const enemyId = enemyIds[i % enemyIds.length] ?? 'enemy_moth';
     const chance = chances[enemyId] ?? moveChanceFor(enemyId);
     return {
       uid: i,

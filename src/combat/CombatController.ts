@@ -8,6 +8,10 @@ export interface EnemyData {
   emoji?: string;
   /** Ключ текстуры спрайта (загружается в preload сцены). */
   texture?: string;
+  /** Ключ map-спрайта (поле). Фолбэк = texture. */
+  mapTexture?: string;
+  /** Тир колоды: regular / elite / miniboss / boss. */
+  tier?: string;
   maxHp: number;
   damage: number;
   /** Задержка перед ответными ударами после атаки игрока (мс). */

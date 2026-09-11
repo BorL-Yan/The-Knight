@@ -1,5 +1,6 @@
 import fieldConfigJson from '../data/field_config.json';
 import enemiesJson from '../data/enemies.json';
+import enemyNamesJson from '../data/enemy_names.json';
 
 /**
  * Единая точка чтения конфигов поля и врагов.
@@ -45,11 +46,16 @@ function loadFieldConfig(raw: unknown): FieldConfig {
 
 export const FIELD_CONFIG: FieldConfig = loadFieldConfig(fieldConfigJson);
 
+export type EnemyTier = 'regular' | 'elite' | 'miniboss' | 'boss';
+
 export interface EnemyCatalogEntry {
   id: string;
   name: string;
   emoji: string;
   texture: string;
+  /** Ключ map-спрайта (public/assets/characters/maps/<key>.png). Фолбэк = texture. */
+  mapTexture: string;
+  tier: EnemyTier;
   maxHp: number;
   damage: number;
   attackIntervalMs: number;
@@ -66,11 +72,34 @@ export interface EnemyCatalogEntry {
   coins: number;
 }
 
+/** Отдельная точка для уникальных имён: src/data/enemy_names.json. */
+const ENEMY_NAMES = (enemyNamesJson ?? {}) as Record<string, unknown>;
+
+/** Миграция старых сейвов: enemy_1/2/boss -> новые id колоды. */
+const LEGACY_ID_ALIASES: Record<string, string> = {
+  enemy_1: 'enemy_moth',
+  enemy_2: 'enemy_gator',
+  enemy_boss: 'boss_hollow',
+};
+
+export function resolveEnemyName(id: string, fallbackName?: string): string {
+  const v = ENEMY_NAMES[id];
+  if (typeof v === 'string' && v.trim().length > 0 && !v.startsWith('TODO:')) return v;
+  if (fallbackName && fallbackName.trim().length > 0 && !fallbackName.startsWith('TODO:')) return fallbackName;
+  // Последний шанс: читаемое имя из enemy_names даже с TODO-префиксом без него.
+  if (typeof v === 'string' && v.startsWith('TODO:')) return id;
+  return fallbackName && fallbackName.length > 0 ? fallbackName : id;
+}
+
+function parseTier(v: unknown): EnemyTier {
+  return v === 'regular' || v === 'elite' || v === 'miniboss' || v === 'boss' ? v : 'regular';
+}
+
 function loadEnemyCatalog(raw: unknown): EnemyCatalogEntry[] {
   const fallback: EnemyCatalogEntry[] = [
-    { id: 'enemy_1', name: 'Enemy_1', emoji: '🟢', texture: 'enemy_1', maxHp: 60, damage: 8, attackIntervalMs: 800, strikesPerTurn: 1, attackType: 'slash', damageGrowth: 1, spawnWeight: 0.5, moveChance: 0.9, coins: 15 },
-    { id: 'enemy_2', name: 'Enemy_2', emoji: '👹', texture: 'enemy_2', maxHp: 90, damage: 10, attackIntervalMs: 700, strikesPerTurn: 2, attackType: 'double', damageGrowth: 2, spawnWeight: 0.35, moveChance: 0.5, coins: 30 },
-    { id: 'enemy_boss', name: 'Enemy_Boss', emoji: '🗿', texture: 'enemy_boss', maxHp: 130, damage: 12, attackIntervalMs: 650, strikesPerTurn: 3, attackType: 'crush', damageGrowth: 3, spawnWeight: 0.15, moveChance: 0.2, coins: 60 },
+    { id: 'enemy_moth', name: 'enemy_moth', emoji: '🦋', texture: 'enemy_moth', mapTexture: 'enemy_moth', tier: 'regular', maxHp: 55, damage: 7, attackIntervalMs: 850, strikesPerTurn: 1, attackType: 'slash', damageGrowth: 1, spawnWeight: 0.28, moveChance: 0.9, coins: 12 },
+    { id: 'enemy_gator', name: 'enemy_gator', emoji: '🐊', texture: 'enemy_gator', mapTexture: 'enemy_gator', tier: 'regular', maxHp: 75, damage: 9, attackIntervalMs: 750, strikesPerTurn: 1, attackType: 'slash', damageGrowth: 1, spawnWeight: 0.22, moveChance: 0.7, coins: 18 },
+    { id: 'boss_hollow', name: 'boss_hollow', emoji: '🌳', texture: 'boss_hollow', mapTexture: 'boss_hollow', tier: 'boss', maxHp: 320, damage: 20, attackIntervalMs: 600, strikesPerTurn: 4, attackType: 'crush', damageGrowth: 4, spawnWeight: 0, moveChance: 0.15, coins: 150 },
   ];
   if (!Array.isArray(raw) || raw.length === 0) return fallback;
   const out: EnemyCatalogEntry[] = [];
@@ -78,11 +107,16 @@ function loadEnemyCatalog(raw: unknown): EnemyCatalogEntry[] {
     const o = (item ?? {}) as Record<string, unknown>;
     if (typeof o['id'] !== 'string' || (o['id'] as string).length === 0) continue;
     const maxHp = INT(o['maxHp'], 60, 1, 9999);
+    const id = o['id'] as string;
+    const rawName = typeof o['name'] === 'string' ? (o['name'] as string) : id;
+    const texture = typeof o['texture'] === 'string' ? (o['texture'] as string) : id;
     out.push({
-      id: o['id'] as string,
-      name: typeof o['name'] === 'string' ? (o['name'] as string) : (o['id'] as string),
+      id,
+      name: resolveEnemyName(id, rawName),
       emoji: typeof o['emoji'] === 'string' ? (o['emoji'] as string) : '💀',
-      texture: typeof o['texture'] === 'string' ? (o['texture'] as string) : (o['id'] as string),
+      texture,
+      mapTexture: typeof o['mapTexture'] === 'string' ? (o['mapTexture'] as string) : texture,
+      tier: parseTier(o['tier']),
       maxHp,
       damage: INT(o['damage'], 8, 0, 999),
       attackIntervalMs: INT(o['attackIntervalMs'], 700, 50, 10000),
@@ -99,17 +133,25 @@ function loadEnemyCatalog(raw: unknown): EnemyCatalogEntry[] {
 
 export const ENEMY_CATALOG: EnemyCatalogEntry[] = loadEnemyCatalog(enemiesJson);
 
-export function enemyById(id: string): EnemyCatalogEntry | undefined {
-  return ENEMY_CATALOG.find((e) => e.id === id);
+/** Нормализация id: старые сейвы enemy_1/2/boss -> новые id колоды. */
+export function normalizeEnemyId(id: string): string {
+  return LEGACY_ID_ALIASES[id] ?? id;
 }
 
-/** Слабейший по maxHp — наблюдатель-преследователь (первый слот). */
+export function enemyById(id: string): EnemyCatalogEntry | undefined {
+  const norm = normalizeEnemyId(id);
+  return ENEMY_CATALOG.find((e) => e.id === norm);
+}
+
+/** Слабейший regular по maxHp — наблюдатель-преследователь (первый слот). */
 export function weakestEnemy(): EnemyCatalogEntry {
-  return [...ENEMY_CATALOG].sort((a, b) => a.maxHp - b.maxHp)[0] ?? ENEMY_CATALOG[0];
+  const regulars = ENEMY_CATALOG.filter((e) => e.tier === 'regular');
+  const source = regulars.length > 0 ? regulars : ENEMY_CATALOG;
+  return [...source].sort((a, b) => a.maxHp - b.maxHp)[0] ?? ENEMY_CATALOG[0];
 }
 
 export function moveChanceById(id: string): number {
-  return enemyById(id)?.moveChance ?? 0.5;
+  return enemyById(normalizeEnemyId(id))?.moveChance ?? 0.5;
 }
 
 export function moveChances(): Record<string, number> {
@@ -131,14 +173,14 @@ export function coinsFor(entry: EnemyCatalogEntry | undefined, fallbackById?: (i
 
 /**
  * Какие типы поставить на поле (длина = count).
- * Слот 0 всегда слабейший (наблюдатель гарантирован),
- * остальные — взвешенный ролл по spawnWeight.
+ * Слот 0 всегда слабейший regular (наблюдатель гарантирован),
+ * остальные — взвешенный ролл по spawnWeight (tier boss исключён).
  */
 export function pickEnemyIds(count: number, rand: () => number = Math.random): string[] {
   const n = Math.max(1, Math.min(8, Math.round(count)));
   const weak = weakestEnemy().id;
   if (n === 1) return [weak];
-  const pool = ENEMY_CATALOG.filter((e) => e.spawnWeight > 0);
+  const pool = ENEMY_CATALOG.filter((e) => e.spawnWeight > 0 && e.tier !== 'boss');
   const source = pool.length > 0 ? pool : ENEMY_CATALOG;
   const total = source.reduce((s, e) => s + e.spawnWeight, 0) || 1;
   const ids: string[] = [weak];

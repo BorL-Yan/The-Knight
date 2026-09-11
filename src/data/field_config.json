@@ -6,7 +6,7 @@
   "minCellPx": 20,
   "topReservePx": 70,
   "bottomReservePx": 150,
-  "enemyCount": 2,
+  "enemyCount": 3,
   "maxGrassMin": 30,
   "maxGrassSpan": 50
 }

@@ -48,7 +48,20 @@ export class MenuScene extends Phaser.Scene {
       .setOrigin(0.5);
 
     btn.on('pointerup', () => this.scene.start('CombatLab'));
-    this.input.once('pointerup', () => this.scene.start('CombatLab'));
+
+    const previewBtn = this.add
+      .rectangle(width / 2, height * 0.62 + 92, 280, 60, 0x444c5e)
+      .setStrokeStyle(3, 0xffffff)
+      .setInteractive({ useHandCursor: true });
+
+    this.add
+      .text(width / 2, height * 0.62 + 92, '🗺 Генератор карты', {
+        fontSize: '22px',
+        color: '#ffffff',
+      })
+      .setOrigin(0.5);
+
+    previewBtn.on('pointerup', () => this.scene.start('DungeonPreview'));
     applyThickFont(this);
   }
 }

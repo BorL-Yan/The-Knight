@@ -1,3 +1,5 @@
+import { mulberry32 } from './world';
+
 /**
  * Граф полей подземелья для миникарты.
  * - Каждый узел = одно поле (World). Квадрат на карте как на референсе.
@@ -8,6 +10,8 @@
  */
 
 export type DungeonDir = 'N' | 'S' | 'E' | 'W';
+
+export const DUNGEON_DIRS: readonly DungeonDir[] = ['N', 'S', 'E', 'W'];
 
 /** Тип поля. Пока один, но место под новые заложено в типе и JSON. */
 export type RoomType = 'normal';
@@ -157,6 +161,11 @@ export function moveTo(graph: DungeonGraph, nextId: string): void {
   graph.visited.add(nextId);
 }
 
+/** Стороны, на которых у узла есть соседи (= где лабиринт должен прорубить двери). */
+export function linkedDirs(node: DungeonNode): DungeonDir[] {
+  return (Object.keys(node.links) as DungeonDir[]).filter((d) => node.links[d] !== null);
+}
+
 /** Сериализация для save/restore между сценами (реестр / бой). */
 export function serializeDungeon(graph: DungeonGraph): { currentId: string; visited: string[] } {
   return { currentId: graph.currentId, visited: [...graph.visited] };
@@ -176,4 +185,186 @@ export function restoreDungeonState(
     }
   }
   graph.visited.add(graph.currentId);
+}
+
+// ---------- Процедурная генерация ----------
+
+export interface GenerateDungeonOptions {
+  seed?: number;
+  /** Сколько комнат (по умолчанию 13, диапазон 4..40). */
+  roomCount?: number;
+  /** Сколько extra-рёбер добавить сверх дерева = круговых петель (по умолчанию 2). */
+  extraLoops?: number;
+  /** Габариты сетки размещения (по умолчанию 8×8, теснота даёт петли). */
+  width?: number;
+  height?: number;
+}
+
+const DIR_DELTA: Record<DungeonDir, { dx: number; dy: number }> = {
+  N: { dx: 0, dy: -1 },
+  S: { dx: 0, dy: 1 },
+  W: { dx: -1, dy: 0 },
+  E: { dx: 1, dy: 0 },
+};
+
+const OPPOSITE_DIR: Record<DungeonDir, DungeonDir> = { N: 'S', S: 'N', W: 'E', E: 'W' };
+
+function clampDungeonInt(v: number, min: number, max: number, fallback: number): number {
+  if (!Number.isFinite(v)) return fallback;
+  return Math.min(max, Math.max(min, Math.round(v)));
+}
+
+/**
+ * Процедурный данж: сначала комнаты, затем связи.
+ * - Рост от центра: новая комната цепляется к случайной свободной стороне
+ *   случайной комнаты (дерево → связность по построению);
+ * - затем extraLoops рёбер между соседними по координатам, но несвязанными
+ *   комнатами (круговые обходы);
+ * - старт — самая центральная комната; сиды узлов — производные runSeed
+ *   (детерминизм возврата и реплеев).
+ */
+export function generateDungeon(opts: GenerateDungeonOptions = {}): DungeonGraph {
+  const seed = opts.seed ?? 12345;
+  const rand = mulberry32(seed);
+  const target = clampDungeonInt(opts.roomCount ?? 13, 4, 40, 13);
+  const width = clampDungeonInt(opts.width ?? 8, 4, 12, 8);
+  const height = clampDungeonInt(opts.height ?? 8, 4, 12, 8);
+  const wantLoops = clampDungeonInt(opts.extraLoops ?? 2, 0, 8, 2);
+
+  interface GrowRoom {
+    id: string;
+    gx: number;
+    gy: number;
+  }
+  const rooms: GrowRoom[] = [{ id: 'r0', gx: 0, gy: 0 }];
+  const occupied = new Set<string>(['0,0']);
+  const links = new Map<string, DungeonLinks>([
+    ['r0', { N: null, S: null, E: null, W: null }],
+  ]);
+
+  const freeDirs = (gx: number, gy: number, bounded: boolean): DungeonDir[] => {
+    const out: DungeonDir[] = [];
+    for (const d of DUNGEON_DIRS) {
+      const nx = gx + DIR_DELTA[d].dx;
+      const ny = gy + DIR_DELTA[d].dy;
+      if (bounded && (Math.abs(nx) > width / 2 || Math.abs(ny) > height / 2)) continue;
+      if (!occupied.has(`${nx},${ny}`)) out.push(d);
+    }
+    return out;
+  };
+
+  // --- Дерево комнат ---
+  let guard = 0;
+  let bounded = true;
+  while (rooms.length < target && guard++ < 2000) {
+    if (guard === 1000) bounded = false; // тесно — снимаем границы, лишь бы достроить
+    const host = rooms[Math.floor(rand() * rooms.length)];
+    const free = freeDirs(host.gx, host.gy, bounded);
+    if (free.length === 0) continue;
+    const dir = free[Math.floor(rand() * free.length)];
+    const nx = host.gx + DIR_DELTA[dir].dx;
+    const ny = host.gy + DIR_DELTA[dir].dy;
+    const id = `r${rooms.length}`;
+    rooms.push({ id, gx: nx, gy: ny });
+    occupied.add(`${nx},${ny}`);
+    links.set(id, { N: null, S: null, E: null, W: null });
+    (links.get(host.id) as DungeonLinks)[dir] = id;
+    (links.get(id) as DungeonLinks)[OPPOSITE_DIR[dir]] = host.id;
+  }
+
+  // --- Петли: связать соседние по сетке, но несвязанные комнаты ---
+  const byCoord = new Map<string, string>();
+  for (const r of rooms) byCoord.set(`${r.gx},${r.gy}`, r.id);
+  interface Candidate {
+    a: string;
+    b: string;
+    dir: DungeonDir;
+  }
+  const candidates: Candidate[] = [];
+  for (const r of rooms) {
+    for (const d of ['E', 'S'] as DungeonDir[]) {
+      const other = byCoord.get(`${r.gx + DIR_DELTA[d].dx},${r.gy + DIR_DELTA[d].dy}`);
+      if (!other) continue;
+      const lr = links.get(r.id) as DungeonLinks;
+      if (lr[d] !== null) continue;
+      candidates.push({ a: r.id, b: other, dir: d });
+    }
+  }
+  for (let i = candidates.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
+  }
+  for (const c of candidates.slice(0, wantLoops)) {
+    (links.get(c.a) as DungeonLinks)[c.dir] = c.b;
+    (links.get(c.b) as DungeonLinks)[OPPOSITE_DIR[c.dir]] = c.a;
+  }
+
+  // --- Сборка: старт = самая центральная комната ---
+  const med = (ns: number[]): number => {
+    const s = [...ns].sort((a, b) => a - b);
+    return s[Math.floor(s.length / 2)];
+  };
+  const mx = med(rooms.map((r) => r.gx));
+  const my = med(rooms.map((r) => r.gy));
+  let start = rooms[0].id;
+  let best = Infinity;
+  for (const r of rooms) {
+    const d = Math.abs(r.gx - mx) + Math.abs(r.gy - my);
+    if (d < best) {
+      best = d;
+      start = r.id;
+    }
+  }
+
+  const nodes = new Map<string, DungeonNode>();
+  rooms.forEach((r, i) => {
+    nodes.set(r.id, {
+      id: r.id,
+      gx: r.gx,
+      gy: r.gy,
+      type: 'normal',
+      seed: (seed ^ Math.imul(i + 1, 0x9e3779b9)) >>> 0,
+      links: links.get(r.id) as DungeonLinks,
+    });
+  });
+  return { nodes, currentId: start, visited: new Set([start]) };
+}
+
+export interface DungeonValidation {
+  ok: boolean;
+  errors: string[];
+}
+
+/** Инварианты графа: симметрия связей, связность (BFS), степень ≥ 1. */
+export function validateDungeon(graph: DungeonGraph): DungeonValidation {
+  const errors: string[] = [];
+  for (const n of graph.nodes.values()) {
+    for (const d of DUNGEON_DIRS) {
+      const t = n.links[d];
+      if (t === null) continue;
+      const other = graph.nodes.get(t);
+      if (!other) {
+        errors.push(`${n.id}.${d} -> missing ${t}`);
+      } else if (other.links[OPPOSITE_DIR[d]] !== n.id) {
+        errors.push(`asym ${n.id}.${d} -> ${t}`);
+      }
+    }
+    if (linkedDirs(n).length === 0) errors.push(`isolated ${n.id}`);
+  }
+  const seen = new Set<string>();
+  const queue: string[] = [graph.currentId];
+  seen.add(graph.currentId);
+  while (queue.length > 0) {
+    const id = queue.pop() as string;
+    for (const nb of neighborsOf(graph, id)) {
+      if (!seen.has(nb.id)) {
+        seen.add(nb.id);
+        queue.push(nb.id);
+      }
+    }
+  }
+  if (seen.size !== graph.nodes.size) {
+    errors.push(`disconnected: reachable ${seen.size}/${graph.nodes.size}`);
+  }
+  return { ok: errors.length === 0, errors };
 }

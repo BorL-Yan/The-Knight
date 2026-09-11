@@ -6,8 +6,8 @@ import { SwipeInput } from '../input/SwipeInput';
 import { applyThickFont, comboText, thicken } from '../ui/font';
 import { sfx } from '../audio/sfx';
 import combosJson from '../data/combos.json';
-import enemiesJson from '../data/enemies.json';
 import type { EnemyData } from '../combat/CombatController';
+import { ENEMY_CATALOG, normalizeEnemyId } from '../map/fieldConfig';
 
 import {
   cloneProgress,
@@ -19,7 +19,13 @@ import {
 } from '../combat/playerProgress';
 
 const ALL_COMBOS = combosJson as ComboData[];
-const ENEMIES = enemiesJson as EnemyData[];
+const ENEMIES: EnemyData[] = ENEMY_CATALOG.map((e) => ({ ...e }));
+const LAB_WAVE_IDS = ['enemy_moth', 'enemy_slime', 'enemy_gator', 'elite_wraith', 'miniboss_boar', 'boss_hollow'];
+const LAB_WAVES: EnemyData[] = LAB_WAVE_IDS.map((id) => ENEMIES.find((e) => e.id === id) ?? ENEMIES[0]);
+function findEnemy(id: string): EnemyData {
+  const norm = normalizeEnemyId(id);
+  return ENEMIES.find((e) => e.id === norm) ?? ENEMIES[0];
+}
 
 const HERO_TEXTURE = 'herro';
 const FIGHTER_SIZE = 130;
@@ -46,7 +52,7 @@ const FONT_HINT_ARROW = 20;
 /**
  * CombatLabScene — пошаговый стенд с волнами и расширенными комбо:
  * - Игрок Herro СЛЕВА (портрет в левом углу), противник СПРАВА.
- * - Волны: Enemy_1 -> Enemy_2 -> Enemy_Boss, число ударов за ход растет.
+ * - Волны: moth -> slime -> gator -> wraith -> boar -> hollow, число ударов за ход растет.
  * - Все комбо собраны на ОДНОЙ панели, панель ВЫКЛЮЧЕНА по умолчанию
  *   и включается только по нажатию на кнопку ✚ (повторное нажатие — закрыть).
  * - Пока игрок набирает комбинацию, в ПРАВОМ углу показывается hint-панель:
@@ -101,19 +107,13 @@ export class CombatLabScene extends Phaser.Scene {
     this.load.image(HERO_TEXTURE, 'assets/characters/Herro.png');
     for (const e of ENEMIES) {
       if (e.texture) {
-        this.load.image(e.texture, `assets/characters/${this.textureFile(e.texture)}`);
+        this.load.image(e.texture, `assets/characters/details/${e.texture}.png`);
       }
     }
-  }
-
-  /** texture-ключ -> имя файла (ключи повторяют имена файлов). */
-  private textureFile(key: string): string {
-    const map: Record<string, string> = {
-      enemy_1: 'Enemy_1.png',
-      enemy_2: 'Enemy_2.png',
-      enemy_boss: 'Enemy_Boss.png',
-    };
-    return map[key] ?? `${key}.png`;
+    // Легаси-файлы корня (старые сейвы/кэш): подхватить если есть.
+    this.load.image('enemy_1', 'assets/characters/Enemy_1.png');
+    this.load.image('enemy_2', 'assets/characters/Enemy_2.png');
+    this.load.image('enemy_boss', 'assets/characters/Enemy_Boss.png');
   }
 
   /** Масштабировать спрайт чтобы вписался в target px. Возвращает scale. */
@@ -152,7 +152,7 @@ export class CombatLabScene extends Phaser.Scene {
     this.comboById = new Map(this.ownedCombos.map((c) => [c.id, c]));
     this.registry.set('playerProgress', cloneProgress(this.progress));
     if (data?.duel) {
-      const base = ENEMIES.find((e) => e.id === data.duel?.enemyId) ?? ENEMIES[0];
+      const base = findEnemy(data.duel?.enemyId ?? 'enemy_moth');
       // Урон растёт с глубиной (damageGrowth из enemies.json уже применён сценой карты).
       const found: EnemyData =
         typeof data.duel.damageOverride === 'number'
@@ -182,7 +182,7 @@ export class CombatLabScene extends Phaser.Scene {
       this.duelEnemy = null;
       this.controller = new CombatController(
         {
-          enemies: ENEMIES,
+          enemies: LAB_WAVES,
           combos: this.ownedCombos,
           playerMaxHp: 150,
         },
@@ -238,7 +238,7 @@ export class CombatLabScene extends Phaser.Scene {
     this.heroBaseScale = this.fit(this.heroImg, FIGHTER_SIZE);
 
     const firstEnemy = this.controller.getEnemy();
-    this.enemyImg = this.add.image(enemyX, fightY, firstEnemy.texture ?? 'enemy_1');
+    this.enemyImg = this.add.image(enemyX, fightY, firstEnemy.texture ?? 'enemy_moth');
     this.enemyBaseScale = this.fit(this.enemyImg, FIGHTER_SIZE);
     this.enemyImg.setFlipX(true);
 
@@ -403,7 +403,7 @@ export class CombatLabScene extends Phaser.Scene {
       );
       this.bankedCoins = 0;
       this.returnedToMap = false;
-      this.enemyImg.setTexture(this.controller.getEnemy().texture ?? 'enemy_1');
+      this.enemyImg.setTexture(this.controller.getEnemy().texture ?? 'enemy_moth');
       this.enemyBaseScale = this.fit(this.enemyImg, FIGHTER_SIZE);
       const re = this.controller.getEnemy();
       this.statusText
@@ -415,7 +415,7 @@ export class CombatLabScene extends Phaser.Scene {
       return;
     }
     this.controller.resetFight();
-    this.enemyImg.setTexture(this.controller.getEnemy().texture ?? 'enemy_1');
+    this.enemyImg.setTexture(this.controller.getEnemy().texture ?? 'enemy_moth');
     this.enemyBaseScale = this.fit(this.enemyImg, FIGHTER_SIZE);
     this.statusText.setText('Твой ход — собери комбо (нажми ✚ чтобы посмотреть комбо)').setColor('#cfe8cf');
     this.refreshHud();
@@ -588,7 +588,7 @@ export class CombatLabScene extends Phaser.Scene {
       return;
     }
     const enemy = this.controller.getEnemy();
-    this.enemyImg.setTexture(enemy.texture ?? 'enemy_1');
+    this.enemyImg.setTexture(enemy.texture ?? 'enemy_moth');
     this.enemyBaseScale = this.fit(this.enemyImg, FIGHTER_SIZE);
     this.cameras.main.flash(120, 255, 255, 255);
     this.statusText

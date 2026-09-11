@@ -15,8 +15,14 @@
   "rerollCost": 15,
   "startCoins": 0,
   "coinRewards": {
-    "enemy_1": 15,
-    "enemy_2": 30,
-    "enemy_boss": 60
+    "enemy_moth": 12,
+    "enemy_gator": 18,
+    "enemy_slime": 15,
+    "elite_wraith": 35,
+    "elite_owbear": 45,
+    "elite_thorn": 40,
+    "miniboss_boar": 70,
+    "miniboss_myconid": 80,
+    "boss_hollow": 150
   }
 }

@@ -33,10 +33,18 @@ export interface World {
   cells: WorldCell[][];
   spawn: WorldPos;
   enemies: WorldPos[];
-  exits: Record<ExitDir, WorldPos>;
+  /**
+   * Двери поля. Ключи = только связанные стороны графа:
+   * комната с соседями сверху/справа имеет лишь { N, E }.
+   * Глухих выходов нет — граница без двери всегда лес.
+   */
+  exits: Partial<Record<ExitDir, WorldPos>>;
   /** Клетка торговца 🏪: всегда трава, сюда встаёт игрок чтобы открыть магазин. */
   merchant: WorldPos;
 }
+
+/** Все 4 стороны — дефолт когда набор дверей не задан (legacy/тесты). */
+export const ALL_EXIT_DIRS: readonly ExitDir[] = ['N', 'S', 'E', 'W'];
 
 export interface GenerateWorldOptions {
   seed?: number;
@@ -48,6 +56,31 @@ export interface GenerateWorldOptions {
   /** База и разброс числа травяных клеток (по умолчанию 44 + 0..9). */
   maxGrassMin?: number;
   maxGrassSpan?: number;
+  /**
+   * На каких сторонах прорубить двери. Обычно = linkedDirs() узла графа:
+   * двери ровно туда, где есть соседи. Пусто/нет поля — все 4 (как раньше).
+   */
+  exits?: ExitDir[];
+}
+
+/** Нормализация запрошенных дверей: валидные, уникальные, минимум 1. */
+export function normalizeExitDirs(sides: ExitDir[] | undefined): ExitDir[] {
+  const seen = new Set<ExitDir>();
+  for (const d of sides ?? []) {
+    if (d === 'N' || d === 'S' || d === 'E' || d === 'W') seen.add(d);
+  }
+  if (seen.size === 0) return [...ALL_EXIT_DIRS];
+  return [...ALL_EXIT_DIRS].filter((d) => seen.has(d));
+}
+
+/** Позиции существующих дверей (порядок N,S,E,W). */
+export function exitPositions(exits: Partial<Record<ExitDir, WorldPos>>): WorldPos[] {
+  const out: WorldPos[] = [];
+  for (const d of ALL_EXIT_DIRS) {
+    const p = exits[d];
+    if (p) out.push(p);
+  }
+  return out;
 }
 
 export function isInsideWorld(world: World, p: WorldPos): boolean {
@@ -145,13 +178,16 @@ export function countTerrain(world: World, t: Terrain): number {
 }
 
 /**
- * Все 4 выхода — трава и достижимы из спавна,
+ * Требуемые выходы — трава и достижимы из спавна,
  * плюс вся трава — один компонент (без островков).
+ * sides = какие двери проверять (по умолчанию — все существующие).
  */
-export function exitsConnected(world: World): boolean {
+export function exitsConnected(world: World, sides?: ExitDir[]): boolean {
+  const dirs = sides ?? (Object.keys(world.exits) as ExitDir[]);
   const reach = reachableGrass(world, world.spawn);
-  const exits: WorldPos[] = [world.exits.N, world.exits.S, world.exits.E, world.exits.W];
-  for (const e of exits) {
+  for (const d of dirs) {
+    const e = world.exits[d];
+    if (!e) return false;
     if (!isWalkable(world, e)) return false;
     if (!reach.has(posKey(e))) return false;
   }
@@ -172,11 +208,13 @@ export function exitsConnected(world: World): boolean {
  * Мягкая проверка для HUD/JSON-карт: выходы на траве и достижимы,
  * вся трава — один компонент. Число вод не важно (в JSON их может быть 0+).
  */
-export function worldPlayable(world: World): boolean {
+export function worldPlayable(world: World, sides?: ExitDir[]): boolean {
+  const dirs = sides ?? (Object.keys(world.exits) as ExitDir[]);
   const reach = reachableGrass(world, world.spawn);
   if (reach.size === 0) return false;
-  const exits: WorldPos[] = [world.exits.N, world.exits.S, world.exits.E, world.exits.W];
-  for (const e of exits) {
+  for (const d of dirs) {
+    const e = world.exits[d];
+    if (!e) return false;
     if (!isWalkable(world, e)) return false;
     if (!reach.has(posKey(e))) return false;
   }
@@ -215,34 +253,39 @@ function orthoCells(p: WorldPos): WorldPos[] {
   ];
 }
 
-/** Ровно по одному выходу на сторону; граница в этих точках — трава. */
-function randomExits(rand: () => number, cols: number, rows: number): Record<ExitDir, WorldPos> {
+/** По одному выходу на каждую запрошенную сторону; граница в этих точках — трава. */
+function randomExits(
+  rand: () => number,
+  cols: number,
+  rows: number,
+  sides: ExitDir[],
+): Partial<Record<ExitDir, WorldPos>> {
   const col = () => 1 + Math.floor(rand() * (cols - 2));
   const row = () => 1 + Math.floor(rand() * (rows - 2));
-  return {
-    N: { col: col(), row: 0 },
-    S: { col: col(), row: rows - 1 },
-    W: { col: 0, row: row() },
-    E: { col: cols - 1, row: row() },
-  };
+  const exits: Partial<Record<ExitDir, WorldPos>> = {};
+  if (sides.includes('N')) exits.N = { col: col(), row: 0 };
+  if (sides.includes('S')) exits.S = { col: col(), row: rows - 1 };
+  if (sides.includes('W')) exits.W = { col: 0, row: row() };
+  if (sides.includes('E')) exits.E = { col: cols - 1, row: row() };
+  return exits;
 }
 
 /**
- * Тропы лабиринта: от каждого выхода по 2 блуждателя к центру.
+ * Тропы лабиринта: от каждого требуемого выхода по 2 блуждателя к центру.
  * Шаг на 60% жадный (ближе к центру), иначе случайный — получаются
  * ветвистые коридоры. Ходить можно только по interior, граница
  * (кроме выходов) остаётся лесом.
  */
 function carveWalks(
   active: Set<string>,
-  exits: Record<ExitDir, WorldPos>,
+  exits: Partial<Record<ExitDir, WorldPos>>,
   rand: () => number,
   maxActive: number,
   center: WorldPos,
   cols: number,
   rows: number,
 ): void {
-  const starts = [exits.N, exits.S, exits.W, exits.E];
+  const starts = exitPositions(exits);
   for (const start of starts) {
     for (let w = 0; w < 2; w++) {
       if (active.size >= maxActive) return;
@@ -339,12 +382,13 @@ export function generateWorld(opts: GenerateWorldOptions = {}): World {
   const cols = clampInt(opts.cols ?? WORLD_COLS, 3, 30, WORLD_COLS);
   const rows = clampInt(opts.rows ?? WORLD_ROWS, 3, 30, WORLD_ROWS);
   const center = centerOf(cols, rows);
-  const exits = randomExits(rand, cols, rows);
-  const exitKeys = new Set(Object.values(exits).map(posKey));
+  const sides = normalizeExitDirs(opts.exits);
+  const exits = randomExits(rand, cols, rows, sides);
+  const exitKeys = new Set(exitPositions(exits).map(posKey));
   const spawn: WorldPos = { ...center };
 
-  // --- Активные клетки: тропы от 4 выходов к центру + ремонт связности ---
-  const active = new Set<string>([...Object.values(exits).map(posKey)]);
+  // --- Активные клетки: тропы от требуемых выходов к центру + ремонт связности ---
+  const active = new Set<string>([...exitPositions(exits).map(posKey)]);
   const grassMin = clampInt(opts.maxGrassMin ?? 44, 4, 400, 44);
   const grassSpan = clampInt(opts.maxGrassSpan ?? 10, 0, 100, 10);
   const maxActive = grassMin + Math.floor(rand() * (grassSpan + 1));
@@ -415,20 +459,24 @@ export function generateWorld(opts: GenerateWorldOptions = {}): World {
   // Выходы-маркеры на границе (всегда трава).
   (Object.keys(exits) as ExitDir[]).forEach((dir) => {
     const p = exits[dir];
+    if (!p) return;
     cells[p.row][p.col] = { terrain: 'grass', decor: 'none', exit: dir };
   });
 
-  // Декор: пень на E, цветы на W + 1 случайная трава.
-  const e = exits.E;
-  cells[e.row][e.col].decor = 'stump';
-  const wPos = exits.W;
-  cells[wPos.row][wPos.col].decor = 'flowers';
+  // Декор: пень на E (или первой двери), цветы на W (если есть и не пень) + 1 случайная трава.
+  const stumpDir: ExitDir = sides.includes('E') ? 'E' : sides[0];
+  const stumpPos = exits[stumpDir] as WorldPos;
+  cells[stumpPos.row][stumpPos.col].decor = 'stump';
+  const flowerDir: ExitDir | null =
+    sides.includes('W') && stumpDir !== 'W' ? 'W' : null;
+  const flowerPos = flowerDir ? (exits[flowerDir] as WorldPos) : null;
+  if (flowerPos) cells[flowerPos.row][flowerPos.col].decor = 'flowers';
   const flowerPool: WorldPos[] = [];
   for (const k of active) {
     const [c, r] = k.split(',').map(Number);
     const p = { col: c, row: r };
     if (waterSet.has(k)) continue;
-    if (posKey(p) === posKey(e) || posKey(p) === posKey(wPos) || posKey(p) === spawnKey) continue;
+    if (posKey(p) === posKey(stumpPos) || (flowerPos && posKey(p) === posKey(flowerPos)) || posKey(p) === spawnKey) continue;
     if (exitKeys.has(posKey(p))) continue;
     flowerPool.push(p);
   }
@@ -475,28 +523,29 @@ export function generateWorld(opts: GenerateWorldOptions = {}): World {
   const world: World = { cols, rows, cells, spawn: { ...spawn }, enemies, exits, merchant };
 
   // Защита: связность + хотя бы одна вода, иначе запасной вариант.
-  if (!worldPlayable(world) || countTerrain(world, 'water') < 1) {
-    return generateWorldFallback(cols, rows, wantEnemies);
+  if (!worldPlayable(world, sides) || countTerrain(world, 'water') < 1) {
+    return generateWorldFallback(cols, rows, wantEnemies, sides);
   }
   return world;
 }
 
-/** Детерминированный запасной вариант — всегда валиден. */
+/** Детерминированный запасной вариант — всегда валиден. Коридоры только вдоль требуемых осей. */
 function generateWorldFallback(
   cols: number = WORLD_COLS,
   rows: number = WORLD_ROWS,
   wantEnemies = 2,
+  sides: ExitDir[] = [...ALL_EXIT_DIRS],
 ): World {
   const center = centerOf(cols, rows);
-  const exits: Record<ExitDir, WorldPos> = {
-    N: { col: center.col, row: 0 },
-    S: { col: center.col, row: rows - 1 },
-    W: { col: 0, row: center.row },
-    E: { col: cols - 1, row: center.row },
-  };
+  const exits: Partial<Record<ExitDir, WorldPos>> = {};
+  if (sides.includes('N')) exits.N = { col: center.col, row: 0 };
+  if (sides.includes('S')) exits.S = { col: center.col, row: rows - 1 };
+  if (sides.includes('W')) exits.W = { col: 0, row: center.row };
+  if (sides.includes('E')) exits.E = { col: cols - 1, row: center.row };
   const spawn: WorldPos = { ...center };
   const cells = emptyCells(cols, rows);
   // Граница — лес, крест коридоров — трава.
+  // Граница — лес, коридоры — только вдоль требуемых осей.
   for (let c = 0; c < cols; c++) {
     cells[0][c] = { terrain: 'forest', decor: 'none' };
     cells[rows - 1][c] = { terrain: 'forest', decor: 'none' };
@@ -505,15 +554,23 @@ function generateWorldFallback(
     cells[r][0] = { terrain: 'forest', decor: 'none' };
     cells[r][cols - 1] = { terrain: 'forest', decor: 'none' };
   }
-  for (let c = 1; c < cols - 1; c++) cells[center.row][c] = { terrain: 'grass', decor: 'none' };
-  for (let r = 1; r < rows - 1; r++) cells[r][center.col] = { terrain: 'grass', decor: 'none' };
+  const needVertical = sides.includes('N') || sides.includes('S');
+  const needHorizontal = sides.includes('E') || sides.includes('W');
+  if (needHorizontal) {
+    for (let c = 1; c < cols - 1; c++) cells[center.row][c] = { terrain: 'grass', decor: 'none' };
+  }
+  if (needVertical) {
+    for (let r = 1; r < rows - 1; r++) cells[r][center.col] = { terrain: 'grass', decor: 'none' };
+  }
   cells[Math.max(1, center.row - 1)][Math.max(1, center.col - 1)] = { terrain: 'water', decor: 'reeds' };
   (Object.keys(exits) as ExitDir[]).forEach((dir) => {
     const p = exits[dir];
+    if (!p) return;
     cells[p.row][p.col] = { terrain: 'grass', decor: 'none', exit: dir };
   });
-  cells[exits.E.row][exits.E.col].decor = 'stump';
-  cells[exits.W.row][exits.W.col].decor = 'flowers';
+  const stumpPos = exits.E ?? exits[sides[0]];
+  if (stumpPos) cells[stumpPos.row][stumpPos.col].decor = 'stump';
+  if (exits.W && exits.W !== stumpPos) cells[exits.W.row][exits.W.col].decor = 'flowers';
   const enemies: WorldPos[] = [];
   for (let i = 0; i < wantEnemies; i++) {
     const dx = i % 2 === 0 ? -(3 + Math.floor(i / 2)) : 3 + Math.floor(i / 2);
@@ -536,7 +593,7 @@ export function ensureWorldMerchant(world: World): WorldPos {
   if (m && typeof m.col === 'number' && typeof m.row === 'number' && isWalkable(world, m)) {
     return m;
   }
-  const exitKeys = new Set(Object.values(world.exits).map(posKey));
+  const exitKeys = new Set(exitPositions(world.exits).map(posKey));
   const enemyKeys = new Set(world.enemies.map(posKey));
   const spawnKey = posKey(world.spawn);
   let best: WorldPos | null = null;

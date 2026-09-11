@@ -3,6 +3,7 @@ import './style.css';
 import { MapTestScene } from './scenes/MapTestScene';
 import { MenuScene } from './scenes/MenuScene';
 import { CombatLabScene } from './scenes/CombatLabScene';
+import { DungeonPreviewScene } from './scenes/DungeonPreviewScene';
 
 // Референс 1080x1920 из документа, рендерим в половинном разрешении для перфа.
 // Scale.FIT сохраняет пропорции на любом экране 360x640+.
@@ -22,7 +23,7 @@ function boot(): void {
       pixelArt: true,
     },
     // TEST: игра сначала подключается к тестовому полю 7×14 (проверка движения).
-    scene: [MapTestScene, MenuScene, CombatLabScene],
+    scene: [MapTestScene, MenuScene, CombatLabScene, DungeonPreviewScene],
   });
 }
 
