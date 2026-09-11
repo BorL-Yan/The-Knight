@@ -1,3 +1,16 @@
 node_modules/
 dist/
 .DS_Store
+build/
+.cache/
+.vite/
+coverage/
+
+.env
+.env.*
+!.env.example
+
+Thumbs.db
+
+.idea/
+.vscode/
