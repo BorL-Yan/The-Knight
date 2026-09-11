@@ -39,8 +39,8 @@ export interface World {
    * Глухих выходов нет — граница без двери всегда лес.
    */
   exits: Partial<Record<ExitDir, WorldPos>>;
-  /** Клетка торговца 🏪: всегда трава, сюда встаёт игрок чтобы открыть магазин. */
-  merchant: WorldPos;
+  /** Клетка торговца 🏪 (только в комнате-магазине), null — торговца нет. */
+  merchant: WorldPos | null;
 }
 
 /** Все 4 стороны — дефолт когда набор дверей не задан (legacy/тесты). */
@@ -61,6 +61,11 @@ export interface GenerateWorldOptions {
    * двери ровно туда, где есть соседи. Пусто/нет поля — все 4 (как раньше).
    */
   exits?: ExitDir[];
+  /**
+   * Ставить ли торговца. Сцена передаёт true только для комнаты-магазина;
+   * по умолчанию true (legacy-вызовы без данжа — как раньше).
+   */
+  merchant?: boolean;
 }
 
 /** Нормализация запрошенных дверей: валидные, уникальные, минимум 1. */
@@ -486,7 +491,8 @@ export function generateWorld(opts: GenerateWorldOptions = {}): World {
   }
 
   // --- Враги: N шт на траве (N из конфига), дистанция от спавна 3+, не на выходах ---
-  const wantEnemies = clampInt(opts.enemyCount ?? 2, 1, 8, 2);
+  // 0 = мирное поле (магазин): врагов нет, выходы открыты сразу.
+  const wantEnemies = clampInt(opts.enemyCount ?? 2, 0, 8, 2);
   const grassList = [...active]
     .filter((k) => !waterSet.has(k))
     .map((k) => {
@@ -506,25 +512,28 @@ export function generateWorld(opts: GenerateWorldOptions = {}): World {
     enemies.push(...pool.slice(0, wantEnemies - enemies.length));
   }
 
-  // --- Торговец: одна клетка травы, не спавн/выход/враг, желательно в 2+ от спавна ---
+  // --- Торговец: только если поле — магазин. Одна клетка травы,
+  // не спавн/выход/враг, желательно в 2+ от спавна ---
+  const wantMerchant = opts.merchant ?? true;
   const enemyKeys = new Set(enemies.map(posKey));
   let merchant: WorldPos | null = null;
-  for (const minDist of [2, 1, 0]) {
-    const pool = grassList.filter(
-      (p) => !enemyKeys.has(posKey(p)) && manhattan(p, spawn) >= minDist,
-    );
-    if (pool.length > 0) {
-      merchant = pool[Math.floor(rand() * pool.length)];
-      break;
+  if (wantMerchant) {
+    for (const minDist of [2, 1, 0]) {
+      const pool = grassList.filter(
+        (p) => !enemyKeys.has(posKey(p)) && manhattan(p, spawn) >= minDist,
+      );
+      if (pool.length > 0) {
+        merchant = pool[Math.floor(rand() * pool.length)];
+        break;
+      }
     }
   }
-  if (!merchant) merchant = { ...spawn };
 
   const world: World = { cols, rows, cells, spawn: { ...spawn }, enemies, exits, merchant };
 
   // Защита: связность + хотя бы одна вода, иначе запасной вариант.
   if (!worldPlayable(world, sides) || countTerrain(world, 'water') < 1) {
-    return generateWorldFallback(cols, rows, wantEnemies, sides);
+    return generateWorldFallback(cols, rows, wantEnemies, sides, wantMerchant);
   }
   return world;
 }
@@ -535,6 +544,7 @@ function generateWorldFallback(
   rows: number = WORLD_ROWS,
   wantEnemies = 2,
   sides: ExitDir[] = [...ALL_EXIT_DIRS],
+  wantMerchant = true,
 ): World {
   const center = centerOf(cols, rows);
   const exits: Partial<Record<ExitDir, WorldPos>> = {};
@@ -579,17 +589,27 @@ function generateWorldFallback(
       row: center.row,
     });
   }
-  // Торговец рядом со спавном на кресте (трава гарантирована).
-  const merchant: WorldPos = {
-    col: Math.min(cols - 2, Math.max(1, center.col + 1)),
-    row: center.row,
-  };
+  // Торговец рядом со спавном на кресте (трава гарантирована) — только для магазина.
+  const merchant: WorldPos | null = wantMerchant
+    ? {
+        col: Math.min(cols - 2, Math.max(1, center.col + 1)),
+        row: center.row,
+      }
+    : null;
   return { cols, rows, cells, spawn, enemies, exits, merchant };
 }
 
-/** Совместимость со старыми сейвами: если merchant нет — чиним на ближайшей траве. */
-export function ensureWorldMerchant(world: World): WorldPos {
-  const m = (world as Partial<World>).merchant;
+/**
+ * Совместимость со старыми сейвами: чиним битую клетку торговца.
+ * @param want — должно ли поле вообще иметь торговца (только комната-магазин).
+ *   false → merchant сбрасывается в null, никого не выдумываем.
+ */
+export function ensureWorldMerchant(world: World, want = true): WorldPos | null {
+  if (!want) {
+    world.merchant = null;
+    return null;
+  }
+  const m = world.merchant;
   if (m && typeof m.col === 'number' && typeof m.row === 'number' && isWalkable(world, m)) {
     return m;
   }
@@ -611,14 +631,13 @@ export function ensureWorldMerchant(world: World): WorldPos {
       }
     }
   }
-  const fixed = best ?? { ...world.spawn };
-  world.merchant = fixed;
-  return fixed;
+  world.merchant = best;
+  return best;
 }
 
 /** Стоит ли игрок на клетке торговца. */
 export function isOnMerchant(world: World, p: WorldPos): boolean {
-  const m = (world as Partial<World>).merchant;
+  const m = world.merchant;
   if (!m) return false;
   return m.col === p.col && m.row === p.row;
 }

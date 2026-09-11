@@ -13,9 +13,8 @@ export type DungeonDir = 'N' | 'S' | 'E' | 'W';
 
 export const DUNGEON_DIRS: readonly DungeonDir[] = ['N', 'S', 'E', 'W'];
 
-/** Тип поля. Пока один, но место под новые заложено в типе и JSON. */
-export type RoomType = 'normal';
-// Будущее: export type RoomType = 'normal' | 'boss' | 'treasure' | 'shop' | 'event' | 'start';
+/** Тип поля. 'shop' — ровно одна комната-магазин на данж (место под boss/treasure/...). */
+export type RoomType = 'normal' | 'shop';
 
 export interface DungeonLinks {
   N: string | null;
@@ -77,9 +76,9 @@ export function parseDungeon(
     const r = (item ?? {}) as RawNode;
     if (typeof r.id !== 'string' || r.id.length === 0) continue;
     if (nodes.has(r.id)) continue;
-    // Пока принимаем только 'normal', неизвестное маппим на 'normal'
+    // Неизвестные будущие типы маппим на 'normal',
     // чтобы старый JSON не ронял игру после добавления новых типов.
-    const type: RoomType = r.type === 'normal' ? 'normal' : 'normal';
+    const type: RoomType = r.type === 'shop' ? 'shop' : 'normal';
     nodes.set(r.id, {
       id: r.id,
       gx: num(r.gx, 0),
@@ -316,13 +315,33 @@ export function generateDungeon(opts: GenerateDungeonOptions = {}): DungeonGraph
     }
   }
 
+  // --- Магазин: ровно одна комната, тупик подальше от старта (не старт) ---
+  const startRoom = rooms.find((r) => r.id === start) ?? rooms[0];
+  const degreeOf = (id: string): number => {
+    const l = links.get(id);
+    if (!l) return 0;
+    return DUNGEON_DIRS.filter((d) => l[d] !== null).length;
+  };
+  const nonStart = rooms.filter((r) => r.id !== start);
+  const deadEnds = nonStart.filter((r) => degreeOf(r.id) === 1);
+  const shopPool = deadEnds.length > 0 ? deadEnds : nonStart;
+  let shopId = shopPool[0]?.id ?? start;
+  let shopDist = -1;
+  for (const r of shopPool) {
+    const d = Math.abs(r.gx - startRoom.gx) + Math.abs(r.gy - startRoom.gy);
+    if (d > shopDist || (d === shopDist && rand() < 0.5)) {
+      shopDist = d;
+      shopId = r.id;
+    }
+  }
+
   const nodes = new Map<string, DungeonNode>();
   rooms.forEach((r, i) => {
     nodes.set(r.id, {
       id: r.id,
       gx: r.gx,
       gy: r.gy,
-      type: 'normal',
+      type: r.id === shopId ? 'shop' : 'normal',
       seed: (seed ^ Math.imul(i + 1, 0x9e3779b9)) >>> 0,
       links: links.get(r.id) as DungeonLinks,
     });
@@ -335,10 +354,15 @@ export interface DungeonValidation {
   errors: string[];
 }
 
-/** Инварианты графа: симметрия связей, связность (BFS), степень ≥ 1. */
+/** Инварианты графа: симметрия связей, связность (BFS), степень ≥ 1, ровно один магазин. */
 export function validateDungeon(graph: DungeonGraph): DungeonValidation {
   const errors: string[] = [];
+  let shops = 0;
   for (const n of graph.nodes.values()) {
+    if (n.type === 'shop') {
+      shops++;
+      if (n.id === graph.currentId) errors.push(`shop ${n.id} is start`);
+    }
     for (const d of DUNGEON_DIRS) {
       const t = n.links[d];
       if (t === null) continue;
@@ -365,6 +389,9 @@ export function validateDungeon(graph: DungeonGraph): DungeonValidation {
   }
   if (seen.size !== graph.nodes.size) {
     errors.push(`disconnected: reachable ${seen.size}/${graph.nodes.size}`);
+  }
+  if (shops !== 1) {
+    errors.push(`shops: ${shops}, want exactly 1`);
   }
   return { ok: errors.length === 0, errors };
 }
