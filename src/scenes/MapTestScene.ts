@@ -167,6 +167,10 @@ export class MapTestScene extends Phaser.Scene {
   private revealPlaying = false;
   private revealId = 0;
   private revealCfg: RevealConfig = { ...DEFAULT_REVEAL };
+  private explanationPlaying = false;
+  private explanationLayer: Phaser.GameObjects.Container | null = null;
+  private explanationHighlight: Phaser.GameObjects.Graphics | null = null;
+  private explanationText: Phaser.GameObjects.Text | null = null;
 
   /** Граф полей (миникарта). Каждый узел = одно поле. */
   private dungeon: DungeonGraph | null = null;
@@ -182,7 +186,7 @@ export class MapTestScene extends Phaser.Scene {
     this.load.image(HERO_TEXTURE, 'assets/characters/Herro.png');
   }
 
-  create(data?: { fromCombat?: boolean }): void {
+  create(data?: { fromCombat?: boolean; explainGeneration?: boolean }): void {
     const { width } = this.scale;
     this.cameras.main.setBackgroundColor('#000000');
     this.cameras.main.fadeIn(200, 0, 0, 0);
@@ -242,6 +246,7 @@ export class MapTestScene extends Phaser.Scene {
     this.bindInput();
     this.refreshHud(restoredMsg ?? 'Готов. Спавн в центре.');
     applyThickFont(this);
+    if (data?.explainGeneration) this.startGenerationExplanation();
     // Победа на клетке торговца — открыть магазин после появления поля.
     if (this.pendingShopOpen) {
       this.pendingShopOpen = false;
@@ -678,7 +683,7 @@ export class MapTestScene extends Phaser.Scene {
   /** Один свайп = ровно одна клетка, ходибельна только трава. */
   private move(dir: SwipeDir): void {
     // Пока поле появляется (волна ~2с), открыт бой или магазин — ввод игнорируется.
-    if (this.revealPlaying || this.combatLock || this.shopOpen) return;
+    if (this.revealPlaying || this.explanationPlaying || this.combatLock || this.shopOpen) return;
     // Стоим на выходе и шагаем наружу — переход на следующее поле.
     const cur = this.world.cells[this.player.row][this.player.col];
     if (cur.exit && dir === EXIT_OUTWARD[cur.exit]) {
@@ -1055,6 +1060,141 @@ export class MapTestScene extends Phaser.Scene {
     this.smallButton(175, y, 100, '🏪', () => this.tryOpenShopManually());
     this.smallButton(285, y, 100, 'Меню', () => this.scene.start('Menu'));
     this.smallButton(430, y, 140, 'Бой →', () => this.scene.start('CombatLab'));
+  }
+
+  private startGenerationExplanation(): void {
+    if (this.explanationPlaying || this.shopOpen || this.combatLock) return;
+    this.explanationPlaying = true;
+    this.revealPlaying = true;
+    this.explanationLayer?.destroy(true);
+    this.explanationLayer = this.add.container(0, 0).setDepth(120);
+    this.explanationHighlight = this.add.graphics();
+    this.explanationLayer.add(this.explanationHighlight);
+    this.explanationText = this.add
+      .text(this.scale.width / 2, 112, '', {
+        fontSize: '18px',
+        color: '#ffffff',
+        backgroundColor: '#14101f',
+        padding: { left: 12, right: 12, top: 8, bottom: 8 },
+        align: 'center',
+        wordWrap: { width: this.scale.width - 40 },
+      })
+      .setOrigin(0.5, 0);
+    this.explanationLayer.add(this.explanationText);
+    const skip = this.add
+      .rectangle(this.scale.width / 2, this.scale.height - 188, 160, 38, 0x444c5e)
+      .setStrokeStyle(2, 0xffffff, 0.8)
+      .setInteractive({ useHandCursor: true });
+    const skipText = this.add
+      .text(this.scale.width / 2, this.scale.height - 188, 'Пропустить', {
+        fontSize: '16px',
+        color: '#ffffff',
+      })
+      .setOrigin(0.5);
+    skip.on('pointerup', () => this.finishGenerationExplanation());
+    this.explanationLayer.add([skip, skipText]);
+
+    const phases = [
+      {
+        title: '1/6  Центр и выходы',
+        detail: 'Генератор выбирает центр появления и по одному выходу на каждой стороне.',
+        color: 0xffd76a,
+        cells: Object.values(this.world.exits).concat([this.world.spawn]),
+      },
+      {
+        title: '2/6  Связанные тропы',
+        detail: 'От каждого выхода прокладывается путь к центру. Если путь не замкнулся, он ремонтируется.',
+        color: 0x8be9fd,
+        cells: this.grassCells(),
+      },
+      {
+        title: '3/6  Вода и лес',
+        detail: 'Свободные клетки становятся лесом, а одна-две внутренние области — водой.',
+        color: 0x4f8cff,
+        cells: this.terrainCells(['water', 'forest']),
+      },
+      {
+        title: '4/6  Декор и выходы',
+        detail: 'На поле добавляются стрелки выходов, цветы, пень и камыш.',
+        color: 0xf4a261,
+        cells: this.decorCells(),
+      },
+      {
+        title: '5/6  Враги и торговец',
+        detail: 'Враги ставятся на траву вдали от старта, затем выбирается безопасная клетка торговца.',
+        color: 0xff6b6b,
+        cells: this.actorCells(),
+      },
+      {
+        title: '6/6  Проверка готовности',
+        detail: 'Проверяется связность травы и доступность всех выходов. После этого поле готово.',
+        color: 0x9aff9a,
+        cells: this.grassCells(),
+      },
+    ];
+    const stepMs = 1500;
+    phases.forEach((phase, index) => {
+      this.time.delayedCall(index * stepMs, () => {
+        if (!this.explanationPlaying || !this.explanationText || !this.explanationHighlight) return;
+        this.explanationText.setText(`${phase.title}\n${phase.detail}`);
+        this.drawExplanationHighlight(phase.cells, phase.color);
+      });
+    });
+    this.time.delayedCall(phases.length * stepMs, () => this.finishGenerationExplanation());
+  }
+
+  private finishGenerationExplanation(): void {
+    this.explanationPlaying = false;
+    this.revealPlaying = false;
+    this.explanationLayer?.destroy(true);
+    this.explanationLayer = null;
+    this.explanationHighlight = null;
+    this.explanationText = null;
+    this.refreshHud('Готово: карта построена и проверена. Можно двигаться.');
+  }
+
+  private grassCells(): WorldPos[] {
+    return this.terrainCells(['grass']);
+  }
+
+  private terrainCells(types: World['cells'][number][number]['terrain'][]): WorldPos[] {
+    const allowed = new Set(types);
+    const cells: WorldPos[] = [];
+    for (let row = 0; row < this.world.rows; row++) {
+      for (let col = 0; col < this.world.cols; col++) {
+        if (allowed.has(this.world.cells[row][col].terrain)) cells.push({ col, row });
+      }
+    }
+    return cells;
+  }
+
+  private decorCells(): WorldPos[] {
+    const cells: WorldPos[] = [];
+    for (let row = 0; row < this.world.rows; row++) {
+      for (let col = 0; col < this.world.cols; col++) {
+        const cell = this.world.cells[row][col];
+        if (cell.exit || cell.decor !== 'none') cells.push({ col, row });
+      }
+    }
+    return cells;
+  }
+
+  private actorCells(): WorldPos[] {
+    return [...this.world.enemies, ensureWorldMerchant(this.world)];
+  }
+
+  private drawExplanationHighlight(cells: WorldPos[], color: number): void {
+    const g = this.explanationHighlight;
+    if (!g) return;
+    g.clear();
+    g.fillStyle(color, 0.18);
+    g.lineStyle(2, color, 0.95);
+    for (const cell of cells) {
+      const x = this.originX + cell.col * this.cell;
+      const y = this.originY + cell.row * this.cell;
+      g.fillRect(x, y, this.cell - 1, this.cell - 1);
+      g.strokeRect(x + 1, y + 1, this.cell - 3, this.cell - 3);
+    }
   }
 
   // ---------- Магазин торговца ----------
