@@ -7,7 +7,7 @@ export class MenuScene extends Phaser.Scene {
   }
 
   preload(): void {
-    this.load.image('herro', 'assets/characters/Herro.png');
+    this.load.image('menu_herro', 'assets/characters/details/Player/Herro.png');
   }
 
   create(): void {
@@ -21,9 +21,9 @@ export class MenuScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
-    if (this.textures.exists('herro')) {
-      const hero = this.add.image(width / 2, height * 0.42, 'herro');
-      const src = this.textures.get('herro').getSourceImage() as { width: number; height: number };
+    if (this.textures.exists('menu_herro')) {
+      const hero = this.add.image(width / 2, height * 0.42, 'menu_herro');
+      const src = this.textures.get('menu_herro').getSourceImage() as { width: number; height: number };
       hero.setScale(110 / Math.max(src.width || 1, src.height || 1));
     }
 

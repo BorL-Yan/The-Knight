@@ -27,7 +27,7 @@ function findEnemy(id: string): EnemyData {
   return ENEMIES.find((e) => e.id === norm) ?? ENEMIES[0];
 }
 
-const HERO_TEXTURE = 'herro';
+const HERO_TEXTURE = 'detail_herro';
 const FIGHTER_SIZE = 130;
 
 // --- Размеры шрифтов (меняйте здесь, чтобы увеличить/уменьшить текст) ---
@@ -104,10 +104,10 @@ export class CombatLabScene extends Phaser.Scene {
   }
 
   preload(): void {
-    this.load.image(HERO_TEXTURE, 'assets/characters/Herro.png');
+    this.load.image(HERO_TEXTURE, 'assets/characters/details/Player/Herro.png');
     for (const e of ENEMIES) {
       if (e.texture) {
-        this.load.image(e.texture, `assets/characters/details/${e.texture}.png`);
+        this.load.image(e.texture, `assets/characters/details/Enemy/${e.texture}.png`);
       }
     }
     // Легаси-файлы корня (старые сейвы/кэш): подхватить если есть.

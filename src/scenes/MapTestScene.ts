@@ -67,7 +67,7 @@ import {
 } from '../map/dungeon';
 import { DungeonMinimap } from '../ui/DungeonMinimap';
 
-const HERO_TEXTURE = 'herro';
+const HERO_TEXTURE = 'map_herro';
 const PLAYER_MAX_HP = 150;
 const MERCHANT_EMOJI = '🏪';
 
@@ -198,11 +198,11 @@ export class MapTestScene extends Phaser.Scene {
   }
 
   preload(): void {
-    this.load.image(HERO_TEXTURE, 'assets/characters/Herro.png');
+    this.load.image(HERO_TEXTURE, 'assets/characters/maps/Player/Herro.png');
     for (const e of ENEMY_CATALOG) {
       const key = `map_${e.id}`;
       const file = (e.mapTexture || e.texture || e.id) as string;
-      this.load.image(key, `assets/characters/maps/${file}.png`);
+      this.load.image(key, `assets/characters/maps/Enemy/${file}.png`);
     }
   }
 

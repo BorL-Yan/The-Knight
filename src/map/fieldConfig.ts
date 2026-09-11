@@ -53,7 +53,7 @@ export interface EnemyCatalogEntry {
   name: string;
   emoji: string;
   texture: string;
-  /** Ключ map-спрайта (public/assets/characters/maps/<key>.png). Фолбэк = texture. */
+  /** Ключ map-спрайта (public/assets/characters/maps/Enemy/<key>.png). Фолбэк = texture. */
   mapTexture: string;
   tier: EnemyTier;
   maxHp: number;
