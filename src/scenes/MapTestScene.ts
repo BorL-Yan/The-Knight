@@ -54,6 +54,7 @@ import {
 import revealDef from '../data/reveal_config.json';
 import dungeonTestJson from '../data/dungeon_test.json';
 import { DEFAULT_REVEAL, parseRevealConfig, type RevealConfig } from '../map/revealConfig';
+import { SHOP_FIELD } from '../map/shopFieldConfig';
 import {
   currentNode,
   generateDungeon,
@@ -88,12 +89,11 @@ function enemyName(id: string): string {
   return enemyById(norm)?.name ?? enemyById(id)?.name ?? norm;
 }
 
-/** Ключ map-текстуры для preload/отрисовки: map_<id>. */
+/** Ключ map-текстуры колоды врага. */
 function enemyMapKey(id: string): string {
   return `map_${normalizeEnemyId(id)}`;
 }
 
-/** Короткая подпись: эмодзи + уникальное имя (точка имён — enemy_names.json). */
 function enemyLabel(id: string): string {
   return `${enemyEmoji(id)} ${enemyName(id)}`;
 }
@@ -204,20 +204,15 @@ export class MapTestScene extends Phaser.Scene {
   preload(): void {
     this.load.image(HERO_TEXTURE, 'assets/characters/maps/Player/Herro.png');
     for (const e of ENEMY_CATALOG) {
-      const key = `map_${e.id}`;
-      const file = (e.mapTexture || e.texture || e.id) as string;
+      const key = enemyMapKey(e.id);
+      const file = e.mapTexture || e.texture || e.id;
       this.load.image(key, `assets/characters/maps/Enemy/${file}.png`);
     }
   }
 
-  /** Вписать спрайт в клетку (как игрок). */
   private fitToCell(img: Phaser.GameObjects.Image, ratio = 0.9): void {
-    const t = this.textures.get(img.texture.key).getSourceImage() as unknown as {
-      width: number;
-      height: number;
-    };
-    const target = this.cell * ratio;
-    img.setScale(target / Math.max(t.width || 1, t.height || 1));
+    const source = this.textures.get(img.texture.key).getSourceImage() as { width: number; height: number };
+    img.setScale((this.cell * ratio) / Math.max(source.width || 1, source.height || 1));
   }
 
   create(data?: { fromCombat?: boolean; seed?: number; explainGeneration?: boolean }): void {
@@ -231,12 +226,6 @@ export class MapTestScene extends Phaser.Scene {
     this.enemyViews = new Map();
     this.merchantView = null;
     this.nodeCache = new Map();
-    // Старт забега с конкретным сидом (из предпросмотра генератора):
-    // форсируем свежую генерацию данжа под него.
-    if (!data?.fromCombat && typeof data?.seed === 'number' && Number.isFinite(data.seed)) {
-      this.seed = data.seed >>> 0;
-      this.dungeon = null;
-    }
     this.ensureDungeon();
 
     let restoredMsg: string | null = null;
@@ -315,10 +304,10 @@ export class MapTestScene extends Phaser.Scene {
   private chaserNote(): string {
     const chaser = this.fieldEnemies.find((e) => e.alive && e.role === 'chaser');
     if (!chaser) return '';
-    const label = enemyLabel(chaser.enemyId);
-    if (hasLineOfSight(this.world, chaser, this.player)) return `${label} видит тебя 👀`;
-    if (chaser.lastSeen) return `${label} идёт к (${chaser.lastSeen.col},${chaser.lastSeen.row})`;
-    return `${label} патруль`;
+    const emoji = enemyEmoji(chaser.enemyId);
+    if (hasLineOfSight(this.world, chaser, this.player)) return `${emoji} видит тебя 👀`;
+    if (chaser.lastSeen) return `${emoji} идёт к (${chaser.lastSeen.col},${chaser.lastSeen.row})`;
+    return `${emoji} патруль`;
   }
 
   /** Стоит ли открыть магазин после возврата из боя (победа на клетке торговца). */
@@ -400,7 +389,6 @@ export class MapTestScene extends Phaser.Scene {
     // mapState оставляем — пригодится для следующего боя на этом же поле.
 
     this.world = state.world;
-    ensureWorldMerchant(this.world);
     this.seed = state.seed;
     this.fieldNum = state.fieldNum;
     this.moves = state.moves;
@@ -410,10 +398,11 @@ export class MapTestScene extends Phaser.Scene {
     // Данж и кэш узлов: без них миникарта и возврат назад невозможны.
     this.ensureDungeon();
     if (this.dungeon && state.dungeon) restoreDungeonState(this.dungeon, state.dungeon);
+    ensureWorldMerchant(this.world, this.dungeon?.nodes.get(this.dungeon.currentId)?.type === 'shop');
     this.nodeCache = new Map();
     if (state.nodeCache) {
       for (const [id, v] of Object.entries(state.nodeCache)) {
-        ensureWorldMerchant(v.world);
+        ensureWorldMerchant(v.world, this.dungeon?.nodes.get(id)?.type === 'shop');
         this.nodeCache.set(id, {
           world: v.world,
           fieldEnemies: v.fieldEnemies.map((e) => ({ ...e, enemyId: normalizeEnemyId(e.enemyId) })),
@@ -434,14 +423,14 @@ export class MapTestScene extends Phaser.Scene {
       // Победа на клетке торговца — после отрисовки откроем магазин.
       this.pendingShopOpen = isOnMerchant(this.world, this.player);
       const shopNote = this.pendingShopOpen ? ' 🏪 Торговец ждёт — открываю магазин...' : '';
-      return `🏆 ${foe ? enemyLabel(foe.enemyId) : '💀'} повержен${coinsNote}! Ты на той же клетке (${this.player.col},${this.player.row}), ❤️ ${this.playerHp}. Осталось врагов: ${left}.${shopNote}`;
+      return `🏆 ${foe ? enemyEmoji(foe.enemyId) : '💀'} повержен${coinsNote}! Ты на той же клетке (${this.player.col},${this.player.row}), ❤️ ${this.playerHp}. Осталось врагов: ${left}.${shopNote}`;
     }
     // Поражение: враг остаётся, игрок откатывается на спавн с полным HP
     // чтобы не было мгновенного повторного боя на той же клетке.
     this.player = { ...this.world.spawn };
     this.visits.add(`${this.player.col},${this.player.row}`);
     this.playerHp = this.playerMaxHp;
-    return `💀 Поражение от ${foe ? enemyLabel(foe.enemyId) : '💀'}... Откат на спавн (${this.player.col},${this.player.row}), ❤️ восстановлено. Враг ждёт!`;
+    return `💀 Поражение от ${foe ? enemyEmoji(foe.enemyId) : '💀'}... Откат на спавн (${this.player.col},${this.player.row}), ❤️ восстановлено. Враг ждёт!`;
   }
 
   /** Мгновенный переход к сцене сражения с этим противником. */
@@ -453,7 +442,7 @@ export class MapTestScene extends Phaser.Scene {
     const entry = enemyById(foe.enemyId);
     const dmg = entry ? scaledDamage(entry, this.fieldNum) : undefined;
     this.cameras.main.flash(180, 255, 60, 60);
-    this.logText?.setText(`${reason} — ⚔️ БОЙ с ${enemyLabel(foe.enemyId)}!`).setColor('#ff9a9a');
+    this.logText?.setText(`${reason} — ⚔️ БОЙ с ${enemyEmoji(foe.enemyId)}!`).setColor('#ff9a9a');
     this.time.delayedCall(350, () => {
       this.scene.start('CombatLab', {
         duel: {
@@ -526,6 +515,7 @@ export class MapTestScene extends Phaser.Scene {
     }
     const items: RevealItem[] = [];
     const arrows: Phaser.GameObjects.Text[] = [];
+    const isShopField = this.dungeon?.nodes.get(this.dungeon.currentId)?.type === 'shop';
     const drop = this.revealCfg.dropPx;
     const track = (obj: { alpha: number; y: number }, c: number, r: number, a = 1): void => {
       const y = obj.y;
@@ -540,8 +530,17 @@ export class MapTestScene extends Phaser.Scene {
         if (cell.terrain === 'void') continue; // чёрный фон как на картинке
         const x = this.originX + c * this.cell;
         const y = this.originY + r * this.cell;
-        const fill =
-          cell.terrain === 'grass' ? 0x4a8f3c : cell.terrain === 'water' ? 0x3f6fd1 : 0x14301a;
+        const fill = isShopField
+          ? cell.terrain === 'grass'
+            ? 0x4caf50
+            : cell.terrain === 'water'
+              ? 0x318b78
+              : 0x1b5e20
+          : cell.terrain === 'grass'
+            ? 0x4a8f3c
+            : cell.terrain === 'water'
+              ? 0x3f6fd1
+              : 0x14301a;
         const rect = this.add.rectangle(x, y, this.cell - 1, this.cell - 1, fill);
         rect.setOrigin(0, 0).setStrokeStyle(1, 0x0a1a0c, 0.8);
         rect.setInteractive({ useHandCursor: false });
@@ -597,7 +596,7 @@ export class MapTestScene extends Phaser.Scene {
       }
     }
 
-    // Полевые враги: map-спрайт колоды, фолбэк — эмодзи. Только живые.
+    // Полевые враги: map-спрайт колоды, фолбэк — эмодзи.
     for (const e of this.aliveEnemies()) {
       const { x, y } = this.cellCenter(e);
       const key = enemyMapKey(e.enemyId);
@@ -610,10 +609,8 @@ export class MapTestScene extends Phaser.Scene {
         track(img, e.col, e.row);
       } else {
         const t = this.add
-          .text(x, y - this.cell * 0.08, enemyEmoji(e.enemyId), { fontSize: `${Math.floor(this.cell * 0.55)}px` })
+          .text(x, y + dy, enemyEmoji(e.enemyId), { fontSize: `${Math.floor(this.cell * 0.55)}px` })
           .setOrigin(0.5);
-        // Наблюдатель: чуть приподнят чтобы отличаться.
-        if (e.role === 'chaser') t.setY(y - this.cell * 0.12);
         this.gridLayer.add(t);
         this.enemyViews.set(e.uid, t);
         track(t, e.col, e.row);
@@ -622,19 +619,28 @@ export class MapTestScene extends Phaser.Scene {
 
     // Торговец 🏪: отдельная клетка травы, встаёшь — открывается магазин.
     try {
-      const m = ensureWorldMerchant(this.world);
-      const { x: mx, y: my } = this.cellCenter(m);
-      // Подложка-прилавок чтобы клетка выделялась.
-      const stall = this.add.circle(mx, my, this.cell * 0.42, 0x8a6d2b, 0.35);
-      stall.setStrokeStyle(2, 0xffd76a, 0.9);
-      this.gridLayer.add(stall);
-      track(stall, m.col, m.row);
-      const mt = this.add
-        .text(mx, my - this.cell * 0.05, MERCHANT_EMOJI, { fontSize: `${Math.floor(this.cell * 0.6)}px` })
-        .setOrigin(0.5);
-      this.gridLayer.add(mt);
-      this.merchantView = mt;
-      track(mt, m.col, m.row);
+      const m = this.world.merchant;
+      if (m) {
+        const { x: mx, y: my } = this.cellCenter(m);
+        const stall = this.add.circle(
+          mx,
+          my,
+          this.cell * 0.42,
+          isShopField ? 0x8bcf65 : 0x8a6d2b,
+          0.35,
+        );
+        stall.setStrokeStyle(2, isShopField ? 0xd8ff9a : 0xffd76a, 0.9);
+        this.gridLayer.add(stall);
+        track(stall, m.col, m.row);
+        const mt = this.add
+          .text(mx, my - this.cell * 0.05, MERCHANT_EMOJI, { fontSize: `${Math.floor(this.cell * 0.6)}px` })
+          .setOrigin(0.5);
+        this.gridLayer.add(mt);
+        this.merchantView = mt;
+        track(mt, m.col, m.row);
+      } else {
+        this.merchantView = null;
+      }
     } catch {
       this.merchantView = null;
     }
@@ -756,8 +762,8 @@ export class MapTestScene extends Phaser.Scene {
       // 1) Игрок сам шагнул на врага — бой немедленно.
       const steppedOn = enemyOnPlayer(this.fieldEnemies, this.player);
       if (steppedOn) {
-        this.refreshHud(`Шаг ${SWIPE_ARROW[dir]} → (${this.player.col}, ${this.player.row}) • ${enemyLabel(steppedOn.enemyId)} засада!`);
-        this.startDuel(steppedOn, `Ты шагнул на ${enemyLabel(steppedOn.enemyId)} (${this.player.col},${this.player.row})`);
+        this.refreshHud(`Шаг ${SWIPE_ARROW[dir]} → (${this.player.col}, ${this.player.row}) • ${enemyEmoji(steppedOn.enemyId)} засада!`);
+        this.startDuel(steppedOn, `Ты шагнул на ${enemyEmoji(steppedOn.enemyId)} (${this.player.col},${this.player.row})`);
         return;
       }
       // 2) Ход врагов — только вслед за успешным ходом игрока.
@@ -785,11 +791,11 @@ export class MapTestScene extends Phaser.Scene {
       if (note) msg += ` • ${note}`;
       const near = adjacentEnemies(this.fieldEnemies, this.player);
       if (near.length > 0 && !entered) {
-        msg += ` • ⚠ ${near.map((e) => enemyLabel(e.enemyId)).join(', ')} рядом!`;
+        msg += ` • ⚠ ${near.map((e) => enemyEmoji(e.enemyId)).join('')} рядом!`;
       }
       if (entered) {
         this.refreshHud(msg);
-        this.startDuel(entered, `${enemyLabel(entered.enemyId)} вошёл в твою клетку (${this.player.col},${this.player.row})`);
+        this.startDuel(entered, `${enemyEmoji(entered.enemyId)} вошёл в твою клетку (${this.player.col},${this.player.row})`);
         return;
       }
       // 3) Клетка торговца — открыть магазин (после хода врагов, если не было боя).
@@ -817,42 +823,39 @@ export class MapTestScene extends Phaser.Scene {
 
   /** Новое случайное поле: генератор (размеры и враги из field_config.json). Seed берёт из this.seed. */
   private loadWorld(): void {
+    const current = this.dungeon ? currentNode(this.dungeon) : null;
+    const isShopField = current?.type === 'shop';
+    const fieldConfig = isShopField ? SHOP_FIELD : FIELD_CONFIG;
     this.world = generateWorld({
       seed: this.seed,
-      cols: FIELD_CONFIG.cols,
-      rows: FIELD_CONFIG.rows,
-      enemyCount: FIELD_CONFIG.enemyCount,
-      maxGrassMin: FIELD_CONFIG.maxGrassMin,
-      maxGrassSpan: FIELD_CONFIG.maxGrassSpan,
-      // Двери ровно на связанных сторонах графа: если у поля соседи
-      // только сверху/справа — лабиринт генерируется с дверями N,E.
+      cols: fieldConfig.cols,
+      rows: fieldConfig.rows,
+      enemyCount: fieldConfig.enemyCount,
+      maxGrassMin: fieldConfig.maxGrassMin,
+      maxGrassSpan: fieldConfig.maxGrassSpan,
+      merchant: isShopField,
+      // Двери совпадают со связями текущей комнаты данжа.
       exits: this.dungeon ? linkedDirs(currentNode(this.dungeon)) : undefined,
     });
-    ensureWorldMerchant(this.world);
+    ensureWorldMerchant(this.world, isShopField);
   }
 
   // ---------- Подземелье (граф полей + миникарта) ----------
 
-  /**
-   * Свежий данж на забег. Лестница: процедурный генератор → тестовый JSON
-   * (фикстура) → null (legacy одиночное поле).
-   */
   private freshDungeon(seed: number): DungeonGraph | null {
     try {
       return generateDungeon({ seed });
     } catch {
-      /* ниже fallback */
+      // Используем JSON-фикстуру как детерминированный fallback.
+      try {
+        return parseDungeon(dungeonTestJson);
+      } catch {
+        return null;
+      }
     }
-    try {
-      const g = parseDungeon(dungeonTestJson);
-      if (g) return g;
-    } catch {
-      /* ниже legacy */
-    }
-    return null;
   }
 
-  /** Данж на текущий забег; при отсутствии — сгенерировать (или fallback). */
+  /** Данж на текущий забег; при отсутствии — сгенерировать. */
   private ensureDungeon(): void {
     if (this.dungeon) return;
     this.dungeon = this.freshDungeon(this.seed);
@@ -898,7 +901,7 @@ export class MapTestScene extends Phaser.Scene {
     const seed = node?.seed ?? this.seed;
     const cached = this.nodeCache.get(nodeId);
     if (cached) {
-      ensureWorldMerchant(cached.world);
+      ensureWorldMerchant(cached.world, node?.type === 'shop');
       this.world = cached.world;
       this.fieldEnemies = cached.fieldEnemies.map((e) => ({
         ...e,
@@ -988,12 +991,12 @@ export class MapTestScene extends Phaser.Scene {
     let msg = `Переход ${fromDir} → поле ${nextId}, вход с ${entry}. ❤️ ${this.playerHp}/${this.playerMaxHp}.`;
     const onEnemy = enemyOnPlayer(this.fieldEnemies, this.player);
     if (onEnemy) {
-      this.refreshHud(`${msg} • ${enemyLabel(onEnemy.enemyId)} враг на входе!`);
+      this.refreshHud(`${msg} • ${enemyEmoji(onEnemy.enemyId)} враг на входе!`);
       // Даём полю появиться (волна ~2с), затем сразу бой.
       this.combatLock = true;
       this.time.delayedCall(this.revealCfg.totalMs + 120, () => {
         this.combatLock = false;
-        this.startDuel(onEnemy, `${enemyLabel(onEnemy.enemyId)} ждал на входе (${this.player.col},${this.player.row})`);
+        this.startDuel(onEnemy, `${enemyEmoji(onEnemy.enemyId)} ждал на входе (${this.player.col},${this.player.row})`);
       });
       applyThickFont(this);
       return;
@@ -1022,12 +1025,12 @@ export class MapTestScene extends Phaser.Scene {
     let msg = `Переход ${fromDir} → seed ${this.seed}, вход с ${entry}. ❤️ ${this.playerHp}/${this.playerMaxHp}.`;
     const onEnemy = enemyOnPlayer(this.fieldEnemies, this.player);
     if (onEnemy) {
-      this.refreshHud(`${msg} • ${enemyLabel(onEnemy.enemyId)} враг на входе!`);
+      this.refreshHud(`${msg} • ${enemyEmoji(onEnemy.enemyId)} враг на входе!`);
       // Даём полю появиться (волна ~2с), затем сразу бой.
       this.combatLock = true;
       this.time.delayedCall(this.revealCfg.totalMs + 120, () => {
         this.combatLock = false;
-        this.startDuel(onEnemy, `${enemyLabel(onEnemy.enemyId)} ждал на входе (${this.player.col},${this.player.row})`);
+        this.startDuel(onEnemy, `${enemyEmoji(onEnemy.enemyId)} ждал на входе (${this.player.col},${this.player.row})`);
       });
       applyThickFont(this);
       return;
@@ -1040,8 +1043,7 @@ export class MapTestScene extends Phaser.Scene {
   private regenerate(): void {
     if (this.combatLock || this.shopOpen) return;
     this.closeShop(true);
-    this.seed = (this.seed + 1) >>> 0;
-    const fresh = this.freshDungeon(this.seed);
+    const fresh = this.freshDungeon((this.seed + 1) >>> 0);
     if (fresh) {
       this.dungeon = fresh;
       this.nodeCache = new Map();
@@ -1054,6 +1056,7 @@ export class MapTestScene extends Phaser.Scene {
       );
       return;
     }
+    this.seed = (this.seed + 1) >>> 0;
     this.loadWorld();
     this.resetPlayer(`Новое поле (seed ${this.seed}). Спавн в центре.`);
   }
@@ -1074,7 +1077,7 @@ export class MapTestScene extends Phaser.Scene {
               const cat = enemyById(e.enemyId);
               const atk = cat ? `:${cat.attackType}${scaledDamage(cat, this.fieldNum)}` : '';
               const reward = cat ? coinsFor(cat, coinsForEnemy) : coinsForEnemy(e.enemyId);
-              return `${enemyEmoji(e.enemyId)}${enemyName(e.enemyId)}(${Math.round(e.moveChance * 100)}%${atk}+${reward}💰)`;
+              return `${enemyEmoji(e.enemyId)}(${Math.round(e.moveChance * 100)}%${atk}+${reward}💰)`;
             })
             .join(' ')
         : '—';
@@ -1243,7 +1246,8 @@ export class MapTestScene extends Phaser.Scene {
   }
 
   private actorCells(): WorldPos[] {
-    return [...this.world.enemies, ensureWorldMerchant(this.world)];
+    const merchant = ensureWorldMerchant(this.world);
+    return merchant ? [...this.world.enemies, merchant] : [...this.world.enemies];
   }
 
   private drawExplanationHighlight(cells: WorldPos[], color: number): void {

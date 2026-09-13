@@ -17,6 +17,6 @@
     { "id": "ev", "gx": 4, "gy": 4, "type": "normal", "seed": 20013, "links": { "N": null, "S": "shop", "E": "mouth", "W": "m1" } },
     { "id": "mouth", "gx": 5, "gy": 4, "type": "normal", "seed": 20014, "links": { "N": null, "S": null, "E": null, "W": "ev" } },
     { "id": "bot", "gx": 2, "gy": 5, "type": "normal", "seed": 20015, "links": { "N": "treasure", "S": null, "E": null, "W": null } },
-    { "id": "shop", "gx": 4, "gy": 5, "type": "normal", "seed": 20016, "links": { "N": "ev", "S": null, "E": null, "W": null } }
+    { "id": "shop", "gx": 4, "gy": 5, "type": "shop", "seed": 20016, "links": { "N": "ev", "S": null, "E": null, "W": null } }
   ]
 }

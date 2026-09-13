@@ -6,8 +6,7 @@ import { visibleIds, type DungeonGraph } from '../map/dungeon';
  * - Каждый квадрат = одно поле, перемычки = связи links.
  * - Fog of war: рисуем только visibleIds() (посещённые + соседи текущей).
  * - Текущее поле — белые уголки-скобки, остальные — красные уголки.
- * - Иконки типов: хук drawRoomIcon() — сейчас 'normal' без иконки,
- *   новые RoomType подхватятся без переделки refresh().
+ * - Иконки типов: торговая комната отмечается зелёным кругом.
  */
 export class DungeonMinimap {
   readonly container: Phaser.GameObjects.Container;
@@ -26,20 +25,20 @@ export class DungeonMinimap {
     this.container.add(this.g);
   }
 
-  /** Заглушка под будущие типы комнат (boss/treasure/shop/...). */
+  /** Рисует отличительный знак комнаты торговца. */
   private drawRoomIcon(g: Phaser.GameObjects.Graphics, type: string, cx: number, cy: number): void {
     switch (type) {
-      case 'normal':
+      case 'shop':
+        g.fillStyle(0x36b85a, 1);
+        g.fillCircle(cx, cy, 6);
+        g.lineStyle(1.5, 0xffd76a, 1);
+        g.strokeCircle(cx, cy, 6);
+        g.fillStyle(0xffffff, 1);
+        g.fillCircle(cx, cy, 2);
+        break;
       default:
         break;
-      // Будущее:
-      // case 'boss': иконка черепа красным
-      // case 'treasure': квадрат-контур
-      // case 'shop': '!'
     }
-    void g;
-    void cx;
-    void cy;
   }
 
   refresh(graph: DungeonGraph): void {
