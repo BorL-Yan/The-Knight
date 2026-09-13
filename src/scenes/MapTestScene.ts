@@ -622,6 +622,17 @@ export class MapTestScene extends Phaser.Scene {
       const m = this.world.merchant;
       if (m) {
         const { x: mx, y: my } = this.cellCenter(m);
+        const merchantTile = this.add.rectangle(
+          this.originX + m.col * this.cell,
+          this.originY + m.row * this.cell,
+          this.cell - 1,
+          this.cell - 1,
+          isShopField ? 0x86b85c : 0x8a6d2b,
+          0.7,
+        );
+        merchantTile.setOrigin(0, 0).setStrokeStyle(2, isShopField ? 0xe4ff9a : 0xffd76a, 1);
+        this.gridLayer.add(merchantTile);
+        track(merchantTile, m.col, m.row);
         const stall = this.add.circle(
           mx,
           my,
